@@ -1,0 +1,8 @@
+{
+  "id": "my-conversation-model",
+  "model_name": "openai/gpt-4o",
+  "api_key": "YOUR_OPENAI_KEY",
+  "system_prompt": "You answer questions based on search results.",
+  "max_bytes": 16384,
+  "history_collection": "conversation_store"
+}

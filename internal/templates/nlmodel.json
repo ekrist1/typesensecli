@@ -1,0 +1,7 @@
+{
+  "id": "my-nl-model",
+  "model_name": "openai/gpt-4o",
+  "api_key": "YOUR_OPENAI_KEY",
+  "system_prompt": "You are a helpful search assistant.",
+  "max_bytes": 16384
+}

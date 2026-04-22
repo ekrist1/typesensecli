@@ -1,0 +1,10 @@
+{
+  "items": [
+    {
+      "id": "promote-brand-x",
+      "rule": { "query": "brand x", "match": "exact" },
+      "includes": [ { "id": "product-123", "position": 1 } ],
+      "excludes": []
+    }
+  ]
+}

@@ -10,7 +10,7 @@ import (
 
 	"clisense/internal/client"
 	"clisense/internal/templates"
-	"clisense/internal/tui"
+	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
 )
 
@@ -101,7 +101,7 @@ func (s Conversations) Update(msg tea.Msg) (Conversations, tea.Cmd) {
 				}
 				b, _ := json.Marshal(reqBody)
 				m, p := client.ConversationTest()
-				return s, tui.DoRequest(s.inner.c, tagConvTest, m, p, b)
+				return s, api.DoRequest(s.inner.c, tagConvTest, m, p, b)
 			}
 		}
 		var cmd tea.Cmd
@@ -132,12 +132,12 @@ func (s Conversations) Update(msg tea.Msg) (Conversations, tea.Cmd) {
 
 	// Surface test response back into the modal viewer.
 	switch m := msg.(type) {
-	case tui.APISuccessMsg:
+	case api.SuccessMsg:
 		if m.Tag == tagConvTest && s.testResult != nil {
 			s.testResult.SetContent(m.Body)
 			return s, nil
 		}
-	case tui.APIErrorMsg:
+	case api.ErrorMsg:
 		if m.Tag == tagConvTest && s.testResult != nil {
 			s.testResult.SetContent([]byte(fmt.Sprintf(`{"error":"HTTP %d","body":%q}`, m.Status, string(m.Body))))
 			return s, nil

@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"clisense/internal/client"
-	"clisense/internal/tui"
+	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
 )
 
@@ -84,7 +84,7 @@ func (r Resource) Init() tea.Cmd { return r.fetchList() }
 
 func (r Resource) fetchList() tea.Cmd {
 	m, p := r.strat.List()
-	return tui.DoRequest(r.c, r.tag("list"), m, p, nil)
+	return api.DoRequest(r.c, r.tag("list"), m, p, nil)
 }
 
 func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
@@ -142,7 +142,7 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 			}
 			r.editor = nil
 			r.isEditing = false
-			return r, tui.DoRequest(r.c, r.tag("save"), method, path, m.Body)
+			return r, api.DoRequest(r.c, r.tag("save"), method, path, m.Body)
 		}
 		return r, cmd
 	}
@@ -155,7 +155,7 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 			if res.Confirmed {
 				if it, ok := r.list.SelectedItem().(resourceItem); ok {
 					m, p := r.strat.Delete(it.id)
-					return r, tui.DoRequest(r.c, r.tag("delete"), m, p, nil)
+					return r, api.DoRequest(r.c, r.tag("delete"), m, p, nil)
 				}
 			}
 			return r, nil
@@ -164,7 +164,7 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 	}
 
 	switch m := msg.(type) {
-	case tui.APISuccessMsg:
+	case api.SuccessMsg:
 		switch m.Tag {
 		case r.tag("list"):
 			r.rawList = m.Body
@@ -189,7 +189,7 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 			r.status = "OK"
 			return r, r.fetchList()
 		}
-	case tui.APIErrorMsg:
+	case api.ErrorMsg:
 		if m.Err != nil {
 			r.status = "network error: " + m.Err.Error()
 		} else {

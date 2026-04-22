@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"clisense/internal/client"
-	"clisense/internal/tui"
+	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
 )
 
@@ -47,17 +47,17 @@ func (s *Collections) SetSize(w, h int) {
 
 func (s Collections) fetchList() tea.Cmd {
 	m, p := client.ListCollections()
-	return tui.DoRequest(s.c, tagCollections, m, p, nil)
+	return api.DoRequest(s.c, tagCollections, m, p, nil)
 }
 
 func (s Collections) fetchDetail(name string) tea.Cmd {
 	m, p := client.GetCollection(name)
-	return tui.DoRequest(s.c, tagCollectionDetail, m, p, nil)
+	return api.DoRequest(s.c, tagCollectionDetail, m, p, nil)
 }
 
 func (s Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 	switch m := msg.(type) {
-	case tui.APISuccessMsg:
+	case api.SuccessMsg:
 		switch m.Tag {
 		case tagCollections:
 			var arr []map[string]any
@@ -78,7 +78,7 @@ func (s Collections) Update(msg tea.Msg) (Collections, tea.Cmd) {
 			s.detail.SetContent(m.Body)
 			return s, nil
 		}
-	case tui.APIErrorMsg:
+	case api.ErrorMsg:
 		if m.Err != nil {
 			s.status = "network error: " + m.Err.Error()
 		} else {

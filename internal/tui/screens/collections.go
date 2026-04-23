@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"clisense/internal/client"
 	"clisense/internal/tui/api"
@@ -105,5 +106,6 @@ func (s Collections) View() string {
 	if s.status != "" {
 		footer = s.status + " · " + footer
 	}
-	return s.list.View() + "    " + s.detail.View() + "\n" + footer
+	body := lipgloss.JoinHorizontal(lipgloss.Top, s.list.View(), "  ", s.detail.View())
+	return body + "\n" + footer
 }

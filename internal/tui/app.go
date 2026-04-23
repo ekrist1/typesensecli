@@ -64,10 +64,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.width, a.height = m.Width, m.Height
-		a.collections.SetSize(a.width, a.height-3)
-		a.nlModels.SetSize(a.width, a.height-3)
-		a.curations.SetSize(a.width, a.height-3)
-		a.conversations.SetSize(a.width, a.height-3)
+		if !a.inSetup {
+			a.collections.SetSize(a.width, a.height-3)
+			a.nlModels.SetSize(a.width, a.height-3)
+			a.curations.SetSize(a.width, a.height-3)
+			a.conversations.SetSize(a.width, a.height-3)
+		}
 		return a, nil
 	case screens.SetupDoneMsg:
 		a.cfg = m.Cfg

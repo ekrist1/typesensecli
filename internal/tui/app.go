@@ -21,7 +21,7 @@ type App struct {
 
 	collections   screens.Collections
 	nlModels      screens.Resource
-	curations     screens.Resource
+	curations     screens.Curations
 	conversations screens.Conversations
 	settings      screens.Settings
 

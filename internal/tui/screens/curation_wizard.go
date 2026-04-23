@@ -8,6 +8,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"clisense/internal/client"
+	"clisense/internal/tui/components"
 )
 
 // curationWizard walks a user through building one curation item:
@@ -22,8 +25,11 @@ import (
 // Multi-item sets aren't supported — users who need that use the raw-JSON
 // escape hatch (key `N` on the Curations tab).
 type curationWizard struct {
+	c    *client.Client
 	name string
 	step int
+
+	width, height int
 
 	itemID textinput.Model
 
@@ -42,6 +48,12 @@ type curationWizard struct {
 	excID    textinput.Model
 	excludes []string
 
+	// Document picker modal. When non-nil all input is routed to it.
+	// pickerTarget tracks which wizard field receives the chosen id:
+	//   0 = incID, 1 = excID.
+	picker       *components.DocPicker
+	pickerTarget int
+
 	preview []byte
 	err     string
 
@@ -57,24 +69,27 @@ type curationInclude struct {
 var ruleTypeLabels = []string{"query + match", "filter_by", "tags (comma-separated)"}
 var matchLabels = []string{"exact", "contains"}
 
-func newCurationWizard(name string) curationWizard {
+func newCurationWizard(c *client.Client, name string, w, h int) curationWizard {
 	mk := func(ph string) textinput.Model {
 		t := textinput.New()
 		t.Placeholder = ph
 		return t
 	}
-	w := curationWizard{
+	wiz := curationWizard{
+		c:        c,
 		name:     name,
+		width:    w,
+		height:   h,
 		itemID:   mk("item id (e.g. promote-brand-x)"),
 		query:    mk("query text (e.g. brand x)"),
 		filterBy: mk("filter expression (e.g. category:=shoes)"),
 		tags:     mk("tag1, tag2"),
-		incID:    mk("document id"),
+		incID:    mk("document id (Ctrl+F to search)"),
 		incPos:   mk("position (1-based)"),
-		excID:    mk("document id"),
+		excID:    mk("document id (Ctrl+F to search)"),
 	}
-	w.itemID.Focus()
-	return w
+	wiz.itemID.Focus()
+	return wiz
 }
 
 func (w curationWizard) Submitted() []byte {
@@ -88,6 +103,27 @@ func (w curationWizard) Cancelled() bool { return w.cancelled }
 func (w curationWizard) Name() string    { return w.name }
 
 func (w curationWizard) Update(msg tea.Msg) (curationWizard, tea.Cmd) {
+	// Document picker modal takes priority.
+	if w.picker != nil {
+		updated, cmd := w.picker.Update(msg)
+		w.picker = &updated
+		if id := w.picker.Picked(); id != "" {
+			switch w.pickerTarget {
+			case 0:
+				w.incID.SetValue(id)
+			case 1:
+				w.excID.SetValue(id)
+			}
+			w.picker = nil
+			return w, nil
+		}
+		if w.picker.Cancelled() {
+			w.picker = nil
+			return w, nil
+		}
+		return w, cmd
+	}
+
 	km, isKey := msg.(tea.KeyMsg)
 	if isKey && km.String() == "esc" {
 		w.cancelled = true
@@ -221,6 +257,13 @@ func (w *curationWizard) validateStep2() bool {
 func (w curationWizard) updateIncludes(msg tea.Msg, km tea.KeyMsg, isKey bool) (curationWizard, tea.Cmd) {
 	if isKey {
 		switch km.String() {
+		case "ctrl+f":
+			if w.incFocus == 0 {
+				p := components.NewDocPicker(w.c, w.width, w.height, "", "")
+				w.picker = &p
+				w.pickerTarget = 0
+				return w, textinput.Blink
+			}
 		case "tab", "shift+tab":
 			w.incFocus = 1 - w.incFocus
 			if w.incFocus == 0 {
@@ -268,6 +311,12 @@ func (w curationWizard) updateIncludes(msg tea.Msg, km tea.KeyMsg, isKey bool) (
 }
 
 func (w curationWizard) updateExcludes(msg tea.Msg, km tea.KeyMsg, isKey bool) (curationWizard, tea.Cmd) {
+	if isKey && km.String() == "ctrl+f" {
+		p := components.NewDocPicker(w.c, w.width, w.height, "", "")
+		w.picker = &p
+		w.pickerTarget = 1
+		return w, textinput.Blink
+	}
 	if isKey && km.String() == "enter" {
 		id := strings.TrimSpace(w.excID.Value())
 		if id == "" {
@@ -343,6 +392,9 @@ func (w curationWizard) buildBody() []byte {
 }
 
 func (w curationWizard) View() string {
+	if w.picker != nil {
+		return w.picker.View()
+	}
 	header := fmt.Sprintf("Curation wizard — %q  (step %d/5)\n\n", w.name, w.step+1)
 
 	var body string
@@ -374,14 +426,14 @@ func (w curationWizard) View() string {
 		body = "Includes (" + fmt.Sprint(len(w.includes)) + " added)\n\n" +
 			"id:       " + w.incID.View() + "\n" +
 			"position: " + w.incPos.View() + "\n\n" +
-			"Enter adds row · blank id + Enter skips to next step · Tab switches field · Esc cancel"
+			"Enter adds row · blank id + Enter skips to next step · Tab switches field · Ctrl+F search · Esc cancel"
 		for _, inc := range w.includes {
 			body += fmt.Sprintf("\n  • %s @ %d", inc.id, inc.position)
 		}
 	case 4:
 		body = "Excludes (" + fmt.Sprint(len(w.excludes)) + " added)\n\n" +
 			"id: " + w.excID.View() + "\n\n" +
-			"Enter adds row · blank id + Enter moves to preview · Esc cancel"
+			"Enter adds row · blank id + Enter moves to preview · Ctrl+F search · Esc cancel"
 		for _, id := range w.excludes {
 			body += "\n  • " + id
 		}

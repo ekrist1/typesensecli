@@ -59,7 +59,7 @@ func (s Curations) Update(msg tea.Msg) (Curations, tea.Cmd) {
 					return s, nil
 				}
 				s.wizardName = nil
-				wiz := newCurationWizard(name)
+				wiz := newCurationWizard(s.inner.c, name, s.inner.width, s.inner.height)
 				s.wizard = &wiz
 				return s, textinput.Blink
 			}

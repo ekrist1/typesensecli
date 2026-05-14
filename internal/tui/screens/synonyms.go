@@ -14,71 +14,63 @@ import (
 	"clisense/internal/tui/components"
 )
 
-type curationCreateMode int
+type synonymCreateMode int
 
 const (
-	curationCreateWizard curationCreateMode = iota
-	curationCreateRaw
+	synonymCreateWizard synonymCreateMode = iota
+	synonymCreateRaw
 )
 
-type curationLinkState struct {
+type synonymLinkState struct {
 	setName     string
 	collections []string
 	index       int
 	errors      []string
 }
 
-// Curations wraps the generic Resource screen for curation sets. It adds two
-// create paths:
-//
-//	n → guided wizard (newCurationWizard) for a single-item set
-//	N → raw JSON editor
-//
-// Both create paths now also prompt for one or more collection names, then
-// link the saved curation set to those collections by patching each
-// collection's `curation_sets` list.
-type Curations struct {
+// Synonyms wraps the generic Resource screen for synonym sets. New synonym
+// sets are saved with PUT /synonym_sets/{name}, then linked to collections by
+// patching each collection's `synonym_sets` list.
+type Synonyms struct {
 	inner Resource
 
-	createMode curationCreateMode
+	createMode synonymCreateMode
 
 	namePrompt *textinput.Model
 	linkPrompt *textinput.Model
-	wizard     *curationWizard
+	wizard     *synonymWizard
 
 	promptErr          string
 	pendingName        string
 	pendingCollections []string
-	pendingLink        *curationLinkState
-	linking            *curationLinkState
+	pendingLink        *synonymLinkState
+	linking            *synonymLinkState
 }
 
-func NewCurations(c *client.Client, w, h int) Curations {
+func NewSynonyms(c *client.Client, w, h int) Synonyms {
 	inner := NewResource(c, ResourceStrategy{
-		TabName:          "Curations",
-		Template:         templates.Curation,
-		List:             client.ListCurationSets,
+		TabName:          "Synonyms",
+		Template:         templates.Synonym,
+		List:             client.ListSynonymSets,
 		Create:           nil,
-		Update:           client.UpsertCurationSet,
-		Delete:           client.DeleteCurationSet,
+		Update:           client.UpsertSynonymSet,
+		Delete:           client.DeleteSynonymSet,
 		CreateNamePrompt: true,
-		ExtractItems:     curationsExtractItems,
-		ExtractDetail:    curationsExtractDetail,
+		ExtractItems:     synonymsExtractItems,
+		ExtractDetail:    synonymsExtractDetail,
 	}, w, h)
-	return Curations{inner: inner}
+	return Synonyms{inner: inner}
 }
 
-func (s *Curations) SetSize(w, h int) { s.inner.SetSize(w, h) }
+func (s *Synonyms) SetSize(w, h int) { s.inner.SetSize(w, h) }
 
-func (s Curations) Init() tea.Cmd { return s.inner.Init() }
+func (s Synonyms) Init() tea.Cmd { return s.inner.Init() }
 
-// HasModal reports whether any overlay is active — prompts, wizard, or an
-// inner Resource modal.
-func (s Curations) HasModal() bool {
+func (s Synonyms) HasModal() bool {
 	return s.namePrompt != nil || s.linkPrompt != nil || s.wizard != nil || s.inner.HasModal()
 }
 
-func (s Curations) Update(msg tea.Msg) (Curations, tea.Cmd) {
+func (s Synonyms) Update(msg tea.Msg) (Synonyms, tea.Cmd) {
 	if s.namePrompt != nil {
 		return s.updateNamePrompt(msg)
 	}
@@ -117,7 +109,7 @@ func (s Curations) Update(msg tea.Msg) (Curations, tea.Cmd) {
 		}
 	case components.JSONEditorSubmitMsg:
 		if s.inner.editor != nil && s.inner.pendingName != "" && !s.inner.isEditing && len(s.pendingCollections) > 0 {
-			s.pendingLink = &curationLinkState{
+			s.pendingLink = &synonymLinkState{
 				setName:     s.inner.pendingName,
 				collections: append([]string(nil), s.pendingCollections...),
 			}
@@ -132,9 +124,9 @@ func (s Curations) Update(msg tea.Msg) (Curations, tea.Cmd) {
 		if s.inner.namePrompt == nil && s.inner.editor == nil && s.inner.confirm == nil {
 			switch m.String() {
 			case "n":
-				return s, s.openCreateNamePrompt(curationCreateWizard)
+				return s, s.openCreateNamePrompt(synonymCreateWizard)
 			case "N":
-				return s, s.openCreateNamePrompt(curationCreateRaw)
+				return s, s.openCreateNamePrompt(synonymCreateRaw)
 			case "e":
 				return s, s.openWizardEdit()
 			case "E":
@@ -148,19 +140,19 @@ func (s Curations) Update(msg tea.Msg) (Curations, tea.Cmd) {
 	return s, cmd
 }
 
-func (s Curations) View() string {
+func (s Synonyms) View() string {
 	switch {
 	case s.namePrompt != nil:
-		body := "Curation set name:\n\n" + s.namePrompt.View() + "\n\nEnter continue · Esc cancel"
-		if s.createMode == curationCreateRaw {
-			body = "Curation set name (raw JSON):\n\n" + s.namePrompt.View() + "\n\nEnter continue · Esc cancel"
+		body := "Synonym set name:\n\n" + s.namePrompt.View() + "\n\nEnter continue · Esc cancel"
+		if s.createMode == synonymCreateRaw {
+			body = "Synonym set name (raw JSON):\n\n" + s.namePrompt.View() + "\n\nEnter continue · Esc cancel"
 		}
 		if s.promptErr != "" {
 			body += "\n\n" + s.promptErr
 		}
 		return body
 	case s.linkPrompt != nil:
-		body := "Collections to link this curation set to:\n\n" + s.linkPrompt.View() +
+		body := "Collections to link this synonym set to:\n\n" + s.linkPrompt.View() +
 			"\n\nComma-separated names · Enter continue · Esc cancel"
 		if s.promptErr != "" {
 			body += "\n\n" + s.promptErr
@@ -178,7 +170,7 @@ func (s Curations) View() string {
 	}
 }
 
-func (s Curations) updateNamePrompt(msg tea.Msg) (Curations, tea.Cmd) {
+func (s Synonyms) updateNamePrompt(msg tea.Msg) (Synonyms, tea.Cmd) {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		switch km.String() {
 		case "esc":
@@ -187,7 +179,7 @@ func (s Curations) updateNamePrompt(msg tea.Msg) (Curations, tea.Cmd) {
 		case "enter":
 			name := strings.TrimSpace(s.namePrompt.Value())
 			if name == "" {
-				s.promptErr = "curation set name is required"
+				s.promptErr = "synonym set name is required"
 				return s, nil
 			}
 			s.pendingName = name
@@ -205,7 +197,7 @@ func (s Curations) updateNamePrompt(msg tea.Msg) (Curations, tea.Cmd) {
 	return s, cmd
 }
 
-func (s Curations) updateLinkPrompt(msg tea.Msg) (Curations, tea.Cmd) {
+func (s Synonyms) updateLinkPrompt(msg tea.Msg) (Synonyms, tea.Cmd) {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		switch km.String() {
 		case "esc":
@@ -221,12 +213,12 @@ func (s Curations) updateLinkPrompt(msg tea.Msg) (Curations, tea.Cmd) {
 			s.promptErr = ""
 			s.linkPrompt = nil
 			switch s.createMode {
-			case curationCreateWizard:
-				wiz := newCurationWizard(s.inner.c, s.pendingName, s.inner.width, s.inner.height)
+			case synonymCreateWizard:
+				wiz := newSynonymWizard(s.pendingName, s.inner.width, s.inner.height)
 				s.wizard = &wiz
 				return s, textinput.Blink
-			case curationCreateRaw:
-				ed := components.NewJSONEditor("New Curations: "+s.pendingName, s.inner.strat.Template, s.inner.width, s.inner.height)
+			case synonymCreateRaw:
+				ed := components.NewJSONEditor("New Synonyms: "+s.pendingName, s.inner.strat.Template, s.inner.width, s.inner.height)
 				s.inner.pendingName = s.pendingName
 				s.inner.editor = &ed
 				s.inner.isEditing = false
@@ -242,21 +234,21 @@ func (s Curations) updateLinkPrompt(msg tea.Msg) (Curations, tea.Cmd) {
 	return s, cmd
 }
 
-func (s Curations) updateWizard(msg tea.Msg) (Curations, tea.Cmd) {
+func (s Synonyms) updateWizard(msg tea.Msg) (Synonyms, tea.Cmd) {
 	updated, cmd := s.wizard.Update(msg)
 	s.wizard = &updated
 	if body := s.wizard.Submitted(); body != nil {
 		name := s.wizard.Name()
 		s.wizard = nil
 		if len(s.pendingCollections) > 0 {
-			s.pendingLink = &curationLinkState{
+			s.pendingLink = &synonymLinkState{
 				setName:     name,
 				collections: append([]string(nil), s.pendingCollections...),
 			}
 		}
 		s.pendingName = ""
 		s.pendingCollections = nil
-		m, p := client.UpsertCurationSet(name)
+		m, p := client.UpsertSynonymSet(name)
 		return s, api.DoRequest(s.inner.c, s.inner.tag("save"), m, p, body)
 	}
 	if s.wizard.Cancelled() {
@@ -266,36 +258,36 @@ func (s Curations) updateWizard(msg tea.Msg) (Curations, tea.Cmd) {
 	return s, cmd
 }
 
-func (s *Curations) openCreateNamePrompt(mode curationCreateMode) tea.Cmd {
+func (s *Synonyms) openCreateNamePrompt(mode synonymCreateMode) tea.Cmd {
 	s.clearCreateState()
 	s.createMode = mode
 	ti := textinput.New()
-	ti.Placeholder = "curation set name"
+	ti.Placeholder = "synonym set name"
 	ti.Focus()
 	s.namePrompt = &ti
 	return textinput.Blink
 }
 
-func (s *Curations) openWizardEdit() tea.Cmd {
+func (s *Synonyms) openWizardEdit() tea.Cmd {
 	it, ok := s.inner.list.SelectedItem().(resourceItem)
 	if !ok {
 		return nil
 	}
 	body := s.inner.strat.ExtractDetail(s.inner.rawList, it.id)
 	if body == nil {
-		s.inner.status = "unable to load selected curation"
+		s.inner.status = "unable to load selected synonym"
 		return nil
 	}
-	wiz, err := newCurationWizardFromBody(s.inner.c, it.id, body, s.inner.width, s.inner.height)
+	wiz, err := newSynonymWizardFromBody(it.id, body, s.inner.width, s.inner.height)
 	if err != nil {
-		s.inner.status = err.Error() + " — use E for raw JSON edit"
+		s.inner.status = err.Error() + " - use E for raw JSON edit"
 		return nil
 	}
 	s.wizard = &wiz
 	return nil
 }
 
-func (s *Curations) openRawEdit() tea.Cmd {
+func (s *Synonyms) openRawEdit() tea.Cmd {
 	it, ok := s.inner.list.SelectedItem().(resourceItem)
 	if !ok {
 		return nil
@@ -310,7 +302,7 @@ func (s *Curations) openRawEdit() tea.Cmd {
 	return nil
 }
 
-func (s *Curations) clearCreateState() {
+func (s *Synonyms) clearCreateState() {
 	s.namePrompt = nil
 	s.linkPrompt = nil
 	s.wizard = nil
@@ -320,23 +312,23 @@ func (s *Curations) clearCreateState() {
 	s.pendingLink = nil
 }
 
-func (s Curations) linkGetTag(collection string) string {
+func (s Synonyms) linkGetTag(collection string) string {
 	return s.inner.tag("link:get:" + collection)
 }
 
-func (s Curations) linkPatchTag(collection string) string {
+func (s Synonyms) linkPatchTag(collection string) string {
 	return s.inner.tag("link:patch:" + collection)
 }
 
-func (s Curations) isLinkGetTag(tag string) bool {
+func (s Synonyms) isLinkGetTag(tag string) bool {
 	return strings.HasPrefix(tag, s.inner.tag("link:get:"))
 }
 
-func (s Curations) isLinkPatchTag(tag string) bool {
+func (s Synonyms) isLinkPatchTag(tag string) bool {
 	return strings.HasPrefix(tag, s.inner.tag("link:patch:"))
 }
 
-func (s *Curations) nextLinkFetch() tea.Cmd {
+func (s *Synonyms) nextLinkFetch() tea.Cmd {
 	if s.linking == nil || s.linking.index >= len(s.linking.collections) {
 		s.finishLinking()
 		return nil
@@ -347,7 +339,7 @@ func (s *Curations) nextLinkFetch() tea.Cmd {
 	return api.DoRequest(s.inner.c, s.linkGetTag(collection), m, p, nil)
 }
 
-func (s Curations) handleLinkGetSuccess(msg api.SuccessMsg) (Curations, tea.Cmd) {
+func (s Synonyms) handleLinkGetSuccess(msg api.SuccessMsg) (Synonyms, tea.Cmd) {
 	if s.linking == nil {
 		return s, nil
 	}
@@ -359,16 +351,16 @@ func (s Curations) handleLinkGetSuccess(msg api.SuccessMsg) (Curations, tea.Cmd)
 		return s, s.nextLinkFetch()
 	}
 
-	curationSets := append([]string(nil), payload.CurationSets...)
-	if !containsString(curationSets, s.linking.setName) {
-		curationSets = append(curationSets, s.linking.setName)
+	synonymSets := append([]string(nil), payload.SynonymSets...)
+	if !containsString(synonymSets, s.linking.setName) {
+		synonymSets = append(synonymSets, s.linking.setName)
 	}
-	body, _ := json.Marshal(map[string]any{"curation_sets": curationSets})
+	body, _ := json.Marshal(map[string]any{"synonym_sets": synonymSets})
 	m, p := client.PatchCollection(collection)
 	return s, api.DoRequest(s.inner.c, s.linkPatchTag(collection), m, p, body)
 }
 
-func (s Curations) handleLinkPatchSuccess(msg api.SuccessMsg) (Curations, tea.Cmd) {
+func (s Synonyms) handleLinkPatchSuccess(msg api.SuccessMsg) (Synonyms, tea.Cmd) {
 	if s.linking == nil {
 		return s, nil
 	}
@@ -376,7 +368,7 @@ func (s Curations) handleLinkPatchSuccess(msg api.SuccessMsg) (Curations, tea.Cm
 	return s, s.nextLinkFetch()
 }
 
-func (s Curations) handleLinkError(msg api.ErrorMsg, op string) (Curations, tea.Cmd) {
+func (s Synonyms) handleLinkError(msg api.ErrorMsg, op string) (Synonyms, tea.Cmd) {
 	if s.linking == nil {
 		return s, nil
 	}
@@ -398,7 +390,7 @@ func (s Curations) handleLinkError(msg api.ErrorMsg, op string) (Curations, tea.
 	return s, s.nextLinkFetch()
 }
 
-func (s *Curations) finishLinking() {
+func (s *Synonyms) finishLinking() {
 	if s.linking == nil {
 		return
 	}
@@ -414,34 +406,7 @@ func (s *Curations) finishLinking() {
 	s.pendingCollections = nil
 }
 
-func parseCollectionNames(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	seen := make(map[string]struct{}, len(parts))
-	for _, part := range parts {
-		name := strings.TrimSpace(part)
-		if name == "" {
-			continue
-		}
-		if _, ok := seen[name]; ok {
-			continue
-		}
-		seen[name] = struct{}{}
-		out = append(out, name)
-	}
-	return out
-}
-
-func containsString(items []string, target string) bool {
-	for _, item := range items {
-		if item == target {
-			return true
-		}
-	}
-	return false
-}
-
-func curationsExtractItems(body []byte) ([]string, error) {
+func synonymsExtractItems(body []byte) ([]string, error) {
 	var arr []map[string]any
 	if err := json.Unmarshal(body, &arr); err != nil {
 		return nil, err
@@ -455,7 +420,7 @@ func curationsExtractItems(body []byte) ([]string, error) {
 	return names, nil
 }
 
-func curationsExtractDetail(body []byte, name string) []byte {
+func synonymsExtractDetail(body []byte, name string) []byte {
 	var arr []map[string]any
 	if err := json.Unmarshal(body, &arr); err != nil {
 		return nil

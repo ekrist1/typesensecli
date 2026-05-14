@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": "coat-synonyms",
+      "synonyms": ["blazer", "coat", "jacket"]
+    },
+    {
+      "id": "smart-phone-synonyms",
+      "root": "smart phone",
+      "synonyms": ["iphone", "android"]
+    }
+  ]
+}

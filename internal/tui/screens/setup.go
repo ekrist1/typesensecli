@@ -38,7 +38,7 @@ func (s Setup) Init() tea.Cmd { return textinput.Blink }
 func (s Setup) Update(msg tea.Msg) (Setup, tea.Cmd) {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		switch km.String() {
-		case "tab", "shift+tab":
+		case "tab", "shift+tab", "up", "down":
 			s.focus = 1 - s.focus
 			if s.focus == 0 {
 				s.url.Focus()
@@ -73,6 +73,6 @@ func (s Setup) View() string {
 	if s.err != "" {
 		v += s.err + "\n"
 	}
-	v += "Tab switch · Enter save · Ctrl+C quit"
+	v += "Tab/↑↓ switch · Enter save · Ctrl+C quit"
 	return v
 }

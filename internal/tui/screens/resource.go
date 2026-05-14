@@ -19,7 +19,7 @@ type ResourceStrategy struct {
 	Template []byte
 
 	List   func() (string, string)
-	Create func() (string, string)            // may be nil when CreateNamePrompt is true
+	Create func() (string, string) // may be nil when CreateNamePrompt is true
 	Update func(id string) (string, string)
 	Delete func(id string) (string, string)
 
@@ -44,6 +44,7 @@ type Resource struct {
 
 	namePrompt  *textinput.Model // open when user is naming a new upsert-by-name item
 	pendingName string           // name captured by namePrompt, used on editor submit
+	selectID    string           // item to reselect after a refresh/save
 
 	rawList       []byte
 	status        string
@@ -58,28 +59,39 @@ func (r resourceItem) Description() string { return "" }
 func (r resourceItem) FilterValue() string { return r.id }
 
 func NewResource(c *client.Client, s ResourceStrategy, w, h int) Resource {
-	l := list.New(nil, list.NewDefaultDelegate(), w/2, h-4)
+	listWidth, detailWidth, paneHeight := splitPaneSizes(w, h)
+	l := list.New(nil, list.NewDefaultDelegate(), listWidth, paneHeight)
 	l.Title = s.TabName
 	l.SetShowStatusBar(false)
+	l.SetShowHelp(false)
+	detail := components.NewJSONView(detailWidth, paneHeight)
+	detail.SetContent([]byte("No item selected."))
 	return Resource{
 		c:      c,
 		strat:  s,
 		list:   l,
-		detail: components.NewJSONView(w/2, h-4),
+		detail: detail,
 		width:  w, height: h,
 	}
 }
 
 func (r *Resource) SetSize(w, h int) {
 	r.width, r.height = w, h
-	r.list.SetSize(w/2, h-4)
-	r.detail.SetSize(w/2, h-4)
+	listWidth, detailWidth, paneHeight := splitPaneSizes(w, h)
+	r.list.SetSize(listWidth, paneHeight)
+	r.detail.SetSize(detailWidth, paneHeight)
 	if r.editor != nil {
 		r.editor.SetSize(w, h)
 	}
 }
 
 func (r Resource) tag(op string) string { return r.strat.TabName + ":" + op }
+
+// HasModal reports whether a name prompt, JSON editor, or confirm dialog is
+// currently displayed. The host app uses this to gate global shortcut keys.
+func (r Resource) HasModal() bool {
+	return r.list.SettingFilter() || r.namePrompt != nil || r.editor != nil || r.confirm != nil
+}
 
 func (r Resource) Init() tea.Cmd { return r.fetchList() }
 
@@ -128,10 +140,12 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 			switch {
 			case r.pendingName != "":
 				method, path = r.strat.Update(r.pendingName)
+				r.selectID = r.pendingName
 				r.pendingName = ""
 			case r.isEditing:
 				if it, ok := r.list.SelectedItem().(resourceItem); ok {
 					method, path = r.strat.Update(it.id)
+					r.selectID = it.id
 				}
 			default:
 				if r.strat.Create == nil {
@@ -140,6 +154,7 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 					return r, nil
 				}
 				method, path = r.strat.Create()
+				r.selectID = ""
 			}
 			r.editor = nil
 			r.isEditing = false
@@ -168,6 +183,12 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 	case api.SuccessMsg:
 		switch m.Tag {
 		case r.tag("list"):
+			selectedID := r.selectID
+			if selectedID == "" {
+				if it, ok := r.list.SelectedItem().(resourceItem); ok {
+					selectedID = it.id
+				}
+			}
 			r.rawList = m.Body
 			ids, err := r.strat.ExtractItems(m.Body)
 			if err != nil {
@@ -180,10 +201,23 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 			}
 			r.list.SetItems(items)
 			r.status = fmt.Sprintf("%d items", len(items))
-			if len(ids) > 0 {
-				if d := r.strat.ExtractDetail(r.rawList, ids[0]); d != nil {
-					r.detail.SetContent(d)
+			r.selectID = ""
+			if len(ids) == 0 {
+				r.detail.SetContent([]byte("No items found."))
+				return r, nil
+			}
+			selectedIndex := 0
+			for i, id := range ids {
+				if id == selectedID {
+					selectedIndex = i
+					break
 				}
+			}
+			r.list.Select(selectedIndex)
+			if d := r.strat.ExtractDetail(r.rawList, ids[selectedIndex]); d != nil {
+				r.detail.SetContent(d)
+			} else {
+				r.detail.SetContent([]byte("No detail available for the selected item."))
 			}
 			return r, nil
 		case r.tag("save"), r.tag("delete"):
@@ -198,6 +232,16 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 		}
 		return r, nil
 	case tea.KeyMsg:
+		if !r.list.SettingFilter() {
+			switch m.String() {
+			case "pgup":
+				r.detail.PageUp()
+				return r, nil
+			case "pgdown":
+				r.detail.PageDown()
+				return r, nil
+			}
+		}
 		switch m.String() {
 		case "r":
 			return r, r.fetchList()
@@ -260,7 +304,7 @@ func (r Resource) View() string {
 	if r.confirm != nil {
 		return r.confirm.View()
 	}
-	footer := "n new · e edit · d delete · r refresh · Esc back"
+	footer := "/ filter · n new · e edit · d delete · PgUp/PgDn scroll JSON · r refresh · q quit"
 	if r.status != "" {
 		footer = r.status + " · " + footer
 	}

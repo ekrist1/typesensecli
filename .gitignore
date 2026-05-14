@@ -1,3 +1,4 @@
 clisense
+dist/
 *.test
 *.out

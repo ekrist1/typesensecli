@@ -2,6 +2,7 @@ package screens
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -59,6 +60,11 @@ type curationWizard struct {
 
 	submitted bool
 	cancelled bool
+
+	bodyExtra      map[string]any
+	itemExtra      map[string]any
+	ruleExtra      map[string]any
+	initialRuleIdx int
 }
 
 type curationInclude struct {
@@ -68,6 +74,8 @@ type curationInclude struct {
 
 var ruleTypeLabels = []string{"query + match", "filter_by", "tags (comma-separated)"}
 var matchLabels = []string{"exact", "contains"}
+
+var errUnsupportedCurationWizard = errors.New("wizard edit supports single-item curations with query/match, filter_by, or tags rules")
 
 func newCurationWizard(c *client.Client, name string, w, h int) curationWizard {
 	mk := func(ph string) textinput.Model {
@@ -90,6 +98,77 @@ func newCurationWizard(c *client.Client, name string, w, h int) curationWizard {
 	}
 	wiz.itemID.Focus()
 	return wiz
+}
+
+func newCurationWizardFromBody(c *client.Client, name string, body []byte, w, h int) (curationWizard, error) {
+	wiz := newCurationWizard(c, name, w, h)
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return wiz, err
+	}
+
+	rawItems, ok := payload["items"].([]any)
+	if !ok || len(rawItems) != 1 {
+		return wiz, errUnsupportedCurationWizard
+	}
+
+	item, ok := rawItems[0].(map[string]any)
+	if !ok {
+		return wiz, errUnsupportedCurationWizard
+	}
+
+	itemID, ok := item["id"].(string)
+	if !ok || strings.TrimSpace(itemID) == "" {
+		return wiz, errUnsupportedCurationWizard
+	}
+	wiz.itemID.SetValue(itemID)
+	wiz.itemID.CursorEnd()
+
+	rule, ok := item["rule"].(map[string]any)
+	if !ok {
+		return wiz, errUnsupportedCurationWizard
+	}
+
+	switch {
+	case hasString(rule, "query"):
+		wiz.ruleIdx = 0
+		wiz.query.SetValue(stringValue(rule, "query"))
+		wiz.query.CursorEnd()
+		match := stringValue(rule, "match")
+		if match == "contains" {
+			wiz.matchIdx = 1
+		}
+	case hasString(rule, "filter_by"):
+		wiz.ruleIdx = 1
+		wiz.filterBy.SetValue(stringValue(rule, "filter_by"))
+		wiz.filterBy.CursorEnd()
+	case hasTagsRule(rule):
+		wiz.ruleIdx = 2
+		wiz.tags.SetValue(strings.Join(stringSliceValue(rule["tags"]), ", "))
+		wiz.tags.CursorEnd()
+	default:
+		return wiz, errUnsupportedCurationWizard
+	}
+	wiz.initialRuleIdx = wiz.ruleIdx
+
+	includes, err := parseWizardIncludes(item["includes"])
+	if err != nil {
+		return wiz, errUnsupportedCurationWizard
+	}
+	wiz.includes = includes
+
+	excludes, err := parseWizardExcludes(item["excludes"])
+	if err != nil {
+		return wiz, errUnsupportedCurationWizard
+	}
+	wiz.excludes = excludes
+
+	wiz.bodyExtra = copyMapWithoutKeys(payload, "items")
+	wiz.itemExtra = copyMapWithoutKeys(item, "id", "rule", "includes", "excludes")
+	wiz.ruleExtra = copyMapWithoutKeys(rule, "query", "match", "filter_by", "tags")
+
+	return wiz, nil
 }
 
 func (w curationWizard) Submitted() []byte {
@@ -259,10 +338,10 @@ func (w curationWizard) updateIncludes(msg tea.Msg, km tea.KeyMsg, isKey bool) (
 		switch km.String() {
 		case "ctrl+f":
 			if w.incFocus == 0 {
-				p := components.NewDocPicker(w.c, w.width, w.height, "", "")
+				p, cmd := components.NewDocPicker(w.c, w.width, w.height)
 				w.picker = &p
 				w.pickerTarget = 0
-				return w, textinput.Blink
+				return w, cmd
 			}
 		case "tab", "shift+tab":
 			w.incFocus = 1 - w.incFocus
@@ -312,10 +391,10 @@ func (w curationWizard) updateIncludes(msg tea.Msg, km tea.KeyMsg, isKey bool) (
 
 func (w curationWizard) updateExcludes(msg tea.Msg, km tea.KeyMsg, isKey bool) (curationWizard, tea.Cmd) {
 	if isKey && km.String() == "ctrl+f" {
-		p := components.NewDocPicker(w.c, w.width, w.height, "", "")
+		p, cmd := components.NewDocPicker(w.c, w.width, w.height)
 		w.picker = &p
 		w.pickerTarget = 1
-		return w, textinput.Blink
+		return w, cmd
 	}
 	if isKey && km.String() == "enter" {
 		id := strings.TrimSpace(w.excID.Value())
@@ -351,15 +430,16 @@ func (w curationWizard) updatePreview(km tea.KeyMsg, isKey bool) (curationWizard
 }
 
 func (w curationWizard) buildBody() []byte {
-	var rule map[string]any
+	rule := copyMapWithoutKeys(nil)
+	if w.ruleIdx == w.initialRuleIdx {
+		rule = copyMapWithoutKeys(w.ruleExtra)
+	}
 	switch w.ruleIdx {
 	case 0:
-		rule = map[string]any{
-			"query": strings.TrimSpace(w.query.Value()),
-			"match": matchLabels[w.matchIdx],
-		}
+		rule["query"] = strings.TrimSpace(w.query.Value())
+		rule["match"] = matchLabels[w.matchIdx]
 	case 1:
-		rule = map[string]any{"filter_by": strings.TrimSpace(w.filterBy.Value())}
+		rule["filter_by"] = strings.TrimSpace(w.filterBy.Value())
 	case 2:
 		parts := strings.Split(w.tags.Value(), ",")
 		tagList := make([]string, 0, len(parts))
@@ -368,7 +448,7 @@ func (w curationWizard) buildBody() []byte {
 				tagList = append(tagList, t)
 			}
 		}
-		rule = map[string]any{"tags": tagList}
+		rule["tags"] = tagList
 	}
 
 	includes := make([]map[string]any, 0, len(w.includes))
@@ -380,13 +460,14 @@ func (w curationWizard) buildBody() []byte {
 		excludes = append(excludes, map[string]any{"id": id})
 	}
 
-	item := map[string]any{
-		"id":       strings.TrimSpace(w.itemID.Value()),
-		"rule":     rule,
-		"includes": includes,
-		"excludes": excludes,
-	}
-	body := map[string]any{"items": []any{item}}
+	item := copyMapWithoutKeys(w.itemExtra)
+	item["id"] = strings.TrimSpace(w.itemID.Value())
+	item["rule"] = rule
+	item["includes"] = includes
+	item["excludes"] = excludes
+
+	body := copyMapWithoutKeys(w.bodyExtra)
+	body["items"] = []any{item}
 	b, _ := json.MarshalIndent(body, "", "  ")
 	return b
 }
@@ -445,4 +526,117 @@ func (w curationWizard) View() string {
 		body += "\n\n⚠ " + w.err
 	}
 	return header + body
+}
+
+func copyMapWithoutKeys(in map[string]any, skip ...string) map[string]any {
+	out := make(map[string]any, len(in))
+	skipSet := make(map[string]struct{}, len(skip))
+	for _, key := range skip {
+		skipSet[key] = struct{}{}
+	}
+	for key, value := range in {
+		if _, ok := skipSet[key]; ok {
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
+func parseWizardIncludes(raw any) ([]curationInclude, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	arr, ok := raw.([]any)
+	if !ok {
+		return nil, errUnsupportedCurationWizard
+	}
+	out := make([]curationInclude, 0, len(arr))
+	for _, entry := range arr {
+		item, ok := entry.(map[string]any)
+		if !ok {
+			return nil, errUnsupportedCurationWizard
+		}
+		id, ok := item["id"].(string)
+		if !ok || strings.TrimSpace(id) == "" {
+			return nil, errUnsupportedCurationWizard
+		}
+		pos, ok := intValue(item["position"])
+		if !ok || pos < 1 {
+			return nil, errUnsupportedCurationWizard
+		}
+		out = append(out, curationInclude{id: id, position: pos})
+	}
+	return out, nil
+}
+
+func parseWizardExcludes(raw any) ([]string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	arr, ok := raw.([]any)
+	if !ok {
+		return nil, errUnsupportedCurationWizard
+	}
+	out := make([]string, 0, len(arr))
+	for _, entry := range arr {
+		item, ok := entry.(map[string]any)
+		if !ok {
+			return nil, errUnsupportedCurationWizard
+		}
+		id, ok := item["id"].(string)
+		if !ok || strings.TrimSpace(id) == "" {
+			return nil, errUnsupportedCurationWizard
+		}
+		out = append(out, id)
+	}
+	return out, nil
+}
+
+func stringSliceValue(raw any) []string {
+	arr, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(arr))
+	for _, item := range arr {
+		if value, ok := item.(string); ok && strings.TrimSpace(value) != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func hasTagsRule(rule map[string]any) bool {
+	values := stringSliceValue(rule["tags"])
+	return len(values) > 0
+}
+
+func hasString(m map[string]any, key string) bool {
+	value, ok := m[key].(string)
+	return ok && strings.TrimSpace(value) != ""
+}
+
+func stringValue(m map[string]any, key string) string {
+	value, _ := m[key].(string)
+	return value
+}
+
+func intValue(raw any) (int, bool) {
+	switch value := raw.(type) {
+	case float64:
+		return int(value), true
+	case int:
+		return value, true
+	case int64:
+		return int(value), true
+	case json.Number:
+		i, err := value.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return int(i), true
+	default:
+		return 0, false
+	}
 }

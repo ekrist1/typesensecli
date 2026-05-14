@@ -65,6 +65,12 @@ func (s *Conversations) SetSize(w, h int) { s.inner.SetSize(w, h) }
 
 func (s Conversations) Init() tea.Cmd { return s.inner.Init() }
 
+// HasModal reports whether the conversation test modal or any inner Resource
+// modal is active.
+func (s Conversations) HasModal() bool {
+	return s.testQuery != nil || s.inner.HasModal()
+}
+
 const tagConvTest = "conversations:test"
 
 func (s Conversations) Update(msg tea.Msg) (Conversations, tea.Cmd) {

@@ -19,7 +19,7 @@ func (p Panel) InnerWidth() int  { return max(0, p.Width-2) }
 func (p Panel) InnerHeight() int { return max(0, p.Height-2) }
 
 func (p Panel) Render(content string) string {
-	if p.Width < 2 || p.Height < 2 {
+	if p.Width < 3 || p.Height < 3 {
 		return content
 	}
 	color := lipgloss.TerminalColor(Subtle)
@@ -58,12 +58,14 @@ func (p Panel) topBorder(color lipgloss.TerminalColor) string {
 	} else {
 		label := " " + p.Title + " "
 		if lipgloss.Width(label) > inner-1 {
+			// Trim by display width (not rune count) so double-width runes
+			// can't overflow the panel. Budget = inner minus the leading "─".
+			budget := inner - 1
 			r := []rune(p.Title)
-			keep := max(0, inner-3)
-			if keep > len(r) {
-				keep = len(r)
+			for len(r) > 0 && lipgloss.Width(" "+string(r)+" ") > budget {
+				r = r[:len(r)-1]
 			}
-			label = " " + string(r[:keep]) + " "
+			label = " " + string(r) + " "
 		}
 		fill := inner - 1 - lipgloss.Width(label)
 		if fill < 0 {

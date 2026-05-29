@@ -1,0 +1,5 @@
+{
+  "description": "Search-only key",
+  "actions": ["documents:search"],
+  "collections": ["*"]
+}

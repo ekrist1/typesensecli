@@ -24,15 +24,23 @@ var Alias []byte
 //go:embed conversation.json
 var Conversation []byte
 
+//go:embed apikey.json
+var APIKey []byte
+
+//go:embed analytics_rule.json
+var AnalyticsRule []byte
+
 // All returns every template keyed by a short identifier.
 func All() map[string][]byte {
 	return map[string][]byte{
-		"nlmodel":      NLModel,
-		"curation":     Curation,
-		"synonym":      Synonym,
-		"stopword":     Stopword,
-		"preset":       Preset,
-		"alias":        Alias,
-		"conversation": Conversation,
+		"nlmodel":        NLModel,
+		"curation":       Curation,
+		"synonym":        Synonym,
+		"stopword":       Stopword,
+		"preset":         Preset,
+		"alias":          Alias,
+		"conversation":   Conversation,
+		"apikey":         APIKey,
+		"analytics_rule": AnalyticsRule,
 	}
 }

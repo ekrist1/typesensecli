@@ -19,6 +19,9 @@ A fast, keyboard-driven terminal UI for administering a [Typesense](https://type
 - **Stopwords** — manage stopword sets.
 - **Presets** — manage reusable search presets.
 - **Conversations** — manage conversation models and test conversational search.
+- **API Keys** — list keys with their scoped actions/collections, create new keys, and delete them. The generated secret is shown **once** at creation time (Typesense never returns it again), so copy it immediately. Keys are immutable, so editing is intentionally disabled.
+- **Analytics** — manage analytics rules (`popular_queries`, `nohits_queries`, `counter`, `log`): create, edit, and delete.
+- **Cluster** — operational dashboard showing `/health`, `/stats.json`, `/metrics.json`, and `/debug`, plus confirm-gated maintenance operations: create snapshot, compact the on-disk DB, trigger leader re-election (vote), and clear the search cache.
 - **Embedded JSON editor** — every create/update flow opens a JSON editor pre-filled from a template.
 - **First-run setup** — a guided setup screen captures your Typesense URL and API key, persisted to a config file.
 
@@ -68,8 +71,8 @@ On first run (or if no config is found) you'll be dropped into the **setup scree
 
 | Key | Action |
 | --- | --- |
-| `1`–`9` | Jump directly to a tab |
-| `Tab` / `Shift+Tab` | Cycle to the next / previous tab |
+| `1`–`9` | Jump directly to one of the first nine tabs |
+| `Tab` / `Shift+Tab` | Cycle to the next / previous tab (use this to reach tabs beyond the ninth) |
 | `q` | Quit |
 | `Ctrl+C` | Quit (always) |
 | `Esc` | Leave Settings and return to Collections |

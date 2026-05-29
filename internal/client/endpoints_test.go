@@ -33,3 +33,72 @@ func TestCollectionAndAliasEndpoints(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIKeyEndpoints(t *testing.T) {
+	tests := []struct {
+		name  string
+		wantM string
+		wantP string
+		call  func() (string, string)
+	}{
+		{name: "list keys", wantM: "GET", wantP: "/keys", call: ListKeys},
+		{name: "create key", wantM: "POST", wantP: "/keys", call: CreateKey},
+		{name: "get key", wantM: "GET", wantP: "/keys/7", call: func() (string, string) { return GetKey("7") }},
+		{name: "delete key", wantM: "DELETE", wantP: "/keys/7", call: func() (string, string) { return DeleteKey("7") }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotM, gotP := tt.call()
+			if gotM != tt.wantM || gotP != tt.wantP {
+				t.Fatalf("got %s %s, want %s %s", gotM, gotP, tt.wantM, tt.wantP)
+			}
+		})
+	}
+}
+
+func TestAnalyticsEndpoints(t *testing.T) {
+	tests := []struct {
+		name  string
+		wantM string
+		wantP string
+		call  func() (string, string)
+	}{
+		{name: "list rules", wantM: "GET", wantP: "/analytics/rules", call: ListAnalyticsRules},
+		{name: "create rule", wantM: "POST", wantP: "/analytics/rules", call: UpsertAnalyticsRule},
+		{name: "delete rule", wantM: "DELETE", wantP: "/analytics/rules/top_queries", call: func() (string, string) { return DeleteAnalyticsRule("top_queries") }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotM, gotP := tt.call()
+			if gotM != tt.wantM || gotP != tt.wantP {
+				t.Fatalf("got %s %s, want %s %s", gotM, gotP, tt.wantM, tt.wantP)
+			}
+		})
+	}
+}
+
+func TestClusterEndpoints(t *testing.T) {
+	tests := []struct {
+		name  string
+		wantM string
+		wantP string
+		call  func() (string, string)
+	}{
+		{name: "health", wantM: "GET", wantP: "/health", call: Health},
+		{name: "stats", wantM: "GET", wantP: "/stats.json", call: Stats},
+		{name: "metrics", wantM: "GET", wantP: "/metrics.json", call: Metrics},
+		{name: "debug", wantM: "GET", wantP: "/debug", call: Debug},
+		{name: "compact", wantM: "POST", wantP: "/operations/db/compact", call: CompactDB},
+		{name: "vote", wantM: "POST", wantP: "/operations/vote", call: Vote},
+		{name: "clear cache", wantM: "POST", wantP: "/operations/cache/clear", call: ClearCache},
+		{name: "snapshot", wantM: "POST", wantP: "/operations/snapshot?snapshot_path=%2Ftmp%2Ftypesense-snapshot", call: func() (string, string) { return Snapshot("/tmp/typesense-snapshot") }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotM, gotP := tt.call()
+			if gotM != tt.wantM || gotP != tt.wantP {
+				t.Fatalf("got %s %s, want %s %s", gotM, gotP, tt.wantM, tt.wantP)
+			}
+		})
+	}
+}

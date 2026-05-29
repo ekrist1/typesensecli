@@ -1,0 +1,12 @@
+{
+  "name": "popular_queries",
+  "type": "popular_queries",
+  "collection": "products",
+  "event_type": "search",
+  "params": {
+    "destination_collection": "product_queries",
+    "limit": 1000,
+    "expand_query": false,
+    "capture_search_requests": true
+  }
+}

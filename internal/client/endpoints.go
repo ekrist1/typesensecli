@@ -83,6 +83,35 @@ func DeletePreset(name string) (string, string) {
 	return "DELETE", fmt.Sprintf("/presets/%s", name)
 }
 
+func Health() (string, string)     { return "GET", "/health" }
+func Stats() (string, string)      { return "GET", "/stats.json" }
+func Metrics() (string, string)    { return "GET", "/metrics.json" }
+func Debug() (string, string)      { return "GET", "/debug" }
+func CompactDB() (string, string)  { return "POST", "/operations/db/compact" }
+func Vote() (string, string)       { return "POST", "/operations/vote" }
+func ClearCache() (string, string) { return "POST", "/operations/cache/clear" }
+
+func Snapshot(path string) (string, string) {
+	v := url.Values{}
+	v.Set("snapshot_path", path)
+	return "POST", fmt.Sprintf("/operations/snapshot?%s", v.Encode())
+}
+
+func ListAnalyticsRules() (string, string)  { return "GET", "/analytics/rules" }
+func UpsertAnalyticsRule() (string, string) { return "POST", "/analytics/rules" }
+func DeleteAnalyticsRule(name string) (string, string) {
+	return "DELETE", fmt.Sprintf("/analytics/rules/%s", name)
+}
+
+func ListKeys() (string, string)  { return "GET", "/keys" }
+func CreateKey() (string, string) { return "POST", "/keys" }
+func GetKey(id string) (string, string) {
+	return "GET", fmt.Sprintf("/keys/%s", id)
+}
+func DeleteKey(id string) (string, string) {
+	return "DELETE", fmt.Sprintf("/keys/%s", id)
+}
+
 func ListConversationModels() (string, string)  { return "GET", "/conversations/models" }
 func CreateConversationModel() (string, string) { return "POST", "/conversations/models" }
 func UpdateConversationModel(id string) (string, string) {

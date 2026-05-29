@@ -14,6 +14,7 @@ import (
 	"clisense/internal/client"
 	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
+	"clisense/internal/tui/theme"
 )
 
 const tagCollectionSearch = "collection:search"
@@ -32,15 +33,16 @@ type collectionSearchModal struct {
 	c          *client.Client
 	collection string
 
-	queryBy       textinput.Model
-	queryText     textinput.Model
-	searchable    []string
-	results       list.Model
-	detail        components.JSONView
-	focus         int
-	status        string
-	width, height int
-	closed        bool
+	queryBy                          textinput.Model
+	queryText                        textinput.Model
+	searchable                       []string
+	results                          list.Model
+	detail                           components.JSONView
+	focus                            int
+	status                           string
+	width, height                    int
+	leftW, rightW, resultsH, detailH int
+	closed                           bool
 }
 
 func newCollectionSearchModal(c *client.Client, collection string, searchable []string, w, h int) collectionSearchModal {
@@ -48,7 +50,7 @@ func newCollectionSearchModal(c *client.Client, collection string, searchable []
 
 	queryBy := textinput.New()
 	queryBy.Placeholder = "fields to search (e.g. title,summary)"
-	queryBy.Width = max(20, leftWidth-2)
+	queryBy.Width = max(20, leftWidth-4)
 	queryBy.CharLimit = 0
 	if len(searchable) > 0 {
 		queryBy.SetValue(defaultCollectionSearchField(searchable))
@@ -58,16 +60,17 @@ func newCollectionSearchModal(c *client.Client, collection string, searchable []
 
 	queryText := textinput.New()
 	queryText.Placeholder = "search text"
-	queryText.Width = max(20, leftWidth-2)
+	queryText.Width = max(20, leftWidth-4)
 	queryText.CharLimit = 0
 
-	results := list.New(nil, list.NewDefaultDelegate(), leftWidth, resultsHeight)
+	results := list.New(nil, list.NewDefaultDelegate(), max(1, leftWidth-2), max(1, resultsHeight-2))
 	results.Title = "Results"
+	results.SetShowTitle(false)
 	results.SetShowStatusBar(false)
 	results.SetShowHelp(false)
 	results.SetFilteringEnabled(false)
 
-	detail := components.NewJSONView(rightWidth, detailHeight)
+	detail := components.NewJSONView(max(1, rightWidth-2), max(1, detailHeight-2))
 	detail.SetContent([]byte("Run a search to inspect matching documents."))
 
 	return collectionSearchModal{
@@ -80,16 +83,18 @@ func newCollectionSearchModal(c *client.Client, collection string, searchable []
 		detail:     detail,
 		width:      w,
 		height:     h,
+		leftW:      leftWidth, rightW: rightWidth, resultsH: resultsHeight, detailH: detailHeight,
 	}
 }
 
 func (m *collectionSearchModal) SetSize(w, h int) {
 	m.width, m.height = w, h
 	leftWidth, rightWidth, resultsHeight, detailHeight := collectionSearchSizes(w, h)
-	m.queryBy.Width = max(20, leftWidth-2)
-	m.queryText.Width = max(20, leftWidth-2)
-	m.results.SetSize(leftWidth, resultsHeight)
-	m.detail.SetSize(rightWidth, detailHeight)
+	m.leftW, m.rightW, m.resultsH, m.detailH = leftWidth, rightWidth, resultsHeight, detailHeight
+	m.queryBy.Width = max(20, leftWidth-4)
+	m.queryText.Width = max(20, leftWidth-4)
+	m.results.SetSize(max(1, leftWidth-2), max(1, resultsHeight-2))
+	m.detail.SetSize(max(1, rightWidth-2), max(1, detailHeight-2))
 }
 
 func (m collectionSearchModal) Closed() bool { return m.closed }
@@ -207,9 +212,9 @@ func (m *collectionSearchModal) syncResultPreview() {
 }
 
 func (m collectionSearchModal) View() string {
-	header := fmt.Sprintf("Search collection %q", m.collection)
+	header := theme.HeaderTitle.Render(fmt.Sprintf("Search %q", m.collection))
 	if m.status != "" {
-		header += " · " + m.status
+		header += theme.StatusBar.Render(" · ") + theme.Status(statusKind(m.status), m.status)
 	}
 
 	queryHint := "Available fields: "
@@ -223,16 +228,20 @@ func (m collectionSearchModal) View() string {
 		header,
 		"",
 		"Search fields: " + m.queryBy.View(),
-		lipgloss.NewStyle().Faint(true).Render(queryHint),
+		theme.HeaderMeta.Render(queryHint),
 		"",
 		"Search text:   " + m.queryText.View(),
 		"",
-		m.results.View(),
+		theme.Panel{Title: "Results", Width: m.leftW, Height: m.resultsH, Focused: m.focus == 2}.Render(m.results.View()),
 	}
 
 	left := strings.Join(leftLines, "\n")
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", m.detail.View())
-	footer := "Tab switch · Enter search · Ctrl+B/Ctrl+F scroll JSON · Esc close"
+	detailPanel := theme.Panel{Title: "Document", Width: m.rightW, Height: m.detailH}
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", detailPanel.Render(m.detail.View()))
+	footer := theme.KeyHints(
+		[2]string{"Tab", "switch"}, [2]string{"Enter", "search"},
+		[2]string{"Ctrl+B/Ctrl+F", "scroll"}, [2]string{"Esc", "close"},
+	)
 	return body + "\n" + footer
 }
 

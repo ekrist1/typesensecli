@@ -11,6 +11,7 @@ import (
 	"clisense/internal/client"
 	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
+	"clisense/internal/tui/theme"
 )
 
 // ResourceStrategy configures how a CRUD resource screen talks to the API.
@@ -25,6 +26,10 @@ type ResourceStrategy struct {
 
 	// When true, `n` first asks for a name, then calls Update(name) on submit.
 	CreateNamePrompt bool
+
+	// FooterHints overrides the default footer key hints. Each entry is
+	// [2]string{key, label}. When nil, a default CRUD hint set is used.
+	FooterHints [][2]string
 
 	// ExtractItems parses the list response and returns display IDs.
 	ExtractItems func(body []byte) ([]string, error)
@@ -46,11 +51,12 @@ type Resource struct {
 	pendingName string           // name captured by namePrompt, used on editor submit
 	selectID    string           // item to reselect after a refresh/save
 
-	rawList       []byte
-	status        string
-	width, height int
-	isEditing     bool
-	saveInFlight  bool
+	rawList               []byte
+	listW, detailW, paneH int
+	status                string
+	width, height         int
+	isEditing             bool
+	saveInFlight          bool
 }
 
 type resourceItem struct{ id string }
@@ -61,11 +67,12 @@ func (r resourceItem) FilterValue() string { return r.id }
 
 func NewResource(c *client.Client, s ResourceStrategy, w, h int) Resource {
 	listWidth, detailWidth, paneHeight := splitPaneSizes(w, h)
-	l := list.New(nil, list.NewDefaultDelegate(), listWidth, paneHeight)
+	l := list.New(nil, list.NewDefaultDelegate(), max(1, listWidth-2), max(1, paneHeight-2))
 	l.Title = s.TabName
+	l.SetShowTitle(false) // the panel border shows the title instead
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
-	detail := components.NewJSONView(detailWidth, paneHeight)
+	detail := components.NewJSONView(max(1, detailWidth-2), max(1, paneHeight-2))
 	detail.SetContent([]byte("No item selected."))
 	return Resource{
 		c:      c,
@@ -73,14 +80,16 @@ func NewResource(c *client.Client, s ResourceStrategy, w, h int) Resource {
 		list:   l,
 		detail: detail,
 		width:  w, height: h,
+		listW: listWidth, detailW: detailWidth, paneH: paneHeight,
 	}
 }
 
 func (r *Resource) SetSize(w, h int) {
 	r.width, r.height = w, h
 	listWidth, detailWidth, paneHeight := splitPaneSizes(w, h)
-	r.list.SetSize(listWidth, paneHeight)
-	r.detail.SetSize(detailWidth, paneHeight)
+	r.listW, r.detailW, r.paneH = listWidth, detailWidth, paneHeight
+	r.list.SetSize(max(1, listWidth-2), max(1, paneHeight-2))
+	r.detail.SetSize(max(1, detailWidth-2), max(1, paneHeight-2))
 	if r.editor != nil {
 		r.editor.SetSize(w, h)
 	}
@@ -339,11 +348,20 @@ func (r Resource) View() string {
 	if r.confirm != nil {
 		return r.confirm.View()
 	}
-	footer := "/ filter · n new · e edit · d delete · PgUp/PgDn scroll JSON · r refresh · q quit"
-	if r.status != "" {
-		footer = r.status + " · " + footer
+	hints := r.strat.FooterHints
+	if hints == nil {
+		hints = [][2]string{
+			{"/", "filter"}, {"n", "new"}, {"e", "edit"}, {"d", "delete"},
+			{"PgUp/PgDn", "scroll"}, {"r", "refresh"}, {"q", "quit"},
+		}
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, r.list.View(), "  ", r.detail.View())
+	footer := theme.KeyHints(hints...)
+	if r.status != "" {
+		footer = theme.Status(statusKind(r.status), r.status) + theme.StatusBar.Render(" · ") + footer
+	}
+	listPanel := theme.Panel{Title: r.strat.TabName, Width: r.listW, Height: r.paneH, Focused: true}
+	detailPanel := theme.Panel{Title: "Detail", Width: r.detailW, Height: r.paneH}
+	body := lipgloss.JoinHorizontal(lipgloss.Top, listPanel.Render(r.list.View()), " ", detailPanel.Render(r.detail.View()))
 	return body + "\n" + footer
 }
 

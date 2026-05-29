@@ -14,6 +14,14 @@ func TestCollectionAndAliasEndpoints(t *testing.T) {
 		{name: "get alias", wantM: "GET", wantP: "/aliases/live-products", call: func() (string, string) { return GetAlias("live-products") }},
 		{name: "upsert alias", wantM: "PUT", wantP: "/aliases/live-products", call: func() (string, string) { return UpsertAlias("live-products") }},
 		{name: "delete alias", wantM: "DELETE", wantP: "/aliases/live-products", call: func() (string, string) { return DeleteAlias("live-products") }},
+		{name: "list stopwords", wantM: "GET", wantP: "/stopwords", call: ListStopwords},
+		{name: "get stopwords", wantM: "GET", wantP: "/stopwords/common", call: func() (string, string) { return GetStopwordSet("common") }},
+		{name: "upsert stopwords", wantM: "PUT", wantP: "/stopwords/common", call: func() (string, string) { return UpsertStopwordSet("common") }},
+		{name: "delete stopwords", wantM: "DELETE", wantP: "/stopwords/common", call: func() (string, string) { return DeleteStopwordSet("common") }},
+		{name: "list presets", wantM: "GET", wantP: "/presets", call: ListPresets},
+		{name: "get preset", wantM: "GET", wantP: "/presets/listing_view", call: func() (string, string) { return GetPreset("listing_view") }},
+		{name: "upsert preset", wantM: "PUT", wantP: "/presets/listing_view", call: func() (string, string) { return UpsertPreset("listing_view") }},
+		{name: "delete preset", wantM: "DELETE", wantP: "/presets/listing_view", call: func() (string, string) { return DeletePreset("listing_view") }},
 	}
 
 	for _, tt := range tests {

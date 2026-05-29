@@ -61,6 +61,28 @@ func DeleteSynonymSet(name string) (string, string) {
 	return "DELETE", fmt.Sprintf("/synonym_sets/%s", name)
 }
 
+func ListStopwords() (string, string) { return "GET", "/stopwords" }
+func GetStopwordSet(id string) (string, string) {
+	return "GET", fmt.Sprintf("/stopwords/%s", id)
+}
+func UpsertStopwordSet(id string) (string, string) {
+	return "PUT", fmt.Sprintf("/stopwords/%s", id)
+}
+func DeleteStopwordSet(id string) (string, string) {
+	return "DELETE", fmt.Sprintf("/stopwords/%s", id)
+}
+
+func ListPresets() (string, string) { return "GET", "/presets" }
+func GetPreset(name string) (string, string) {
+	return "GET", fmt.Sprintf("/presets/%s", name)
+}
+func UpsertPreset(name string) (string, string) {
+	return "PUT", fmt.Sprintf("/presets/%s", name)
+}
+func DeletePreset(name string) (string, string) {
+	return "DELETE", fmt.Sprintf("/presets/%s", name)
+}
+
 func ListConversationModels() (string, string)  { return "GET", "/conversations/models" }
 func CreateConversationModel() (string, string) { return "POST", "/conversations/models" }
 func UpdateConversationModel(id string) (string, string) {

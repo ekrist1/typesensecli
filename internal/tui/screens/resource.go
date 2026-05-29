@@ -50,6 +50,7 @@ type Resource struct {
 	status        string
 	width, height int
 	isEditing     bool
+	saveInFlight  bool
 }
 
 type resourceItem struct{ id string }
@@ -101,6 +102,24 @@ func (r Resource) fetchList() tea.Cmd {
 }
 
 func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
+	switch m := msg.(type) {
+	case api.SuccessMsg:
+		if m.Tag == r.tag("save") && r.editor != nil {
+			r.editor = nil
+			r.pendingName = ""
+			r.isEditing = false
+			r.saveInFlight = false
+			r.status = "OK"
+			return r, r.fetchList()
+		}
+	case api.ErrorMsg:
+		if m.Tag == r.tag("save") && r.editor != nil {
+			r.saveInFlight = false
+			r.editor.SetError(formatAPIError(m))
+			return r, nil
+		}
+	}
+
 	// Name prompt modal — open when creating an upsert-by-name resource.
 	if r.namePrompt != nil {
 		if km, ok := msg.(tea.KeyMsg); ok {
@@ -134,14 +153,18 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 			r.editor = nil
 			r.pendingName = ""
 			r.isEditing = false
+			r.saveInFlight = false
 			return r, nil
 		case components.JSONEditorSubmitMsg:
+			if r.saveInFlight {
+				r.editor.SetError("save already in progress")
+				return r, nil
+			}
 			var method, path string
 			switch {
 			case r.pendingName != "":
 				method, path = r.strat.Update(r.pendingName)
 				r.selectID = r.pendingName
-				r.pendingName = ""
 			case r.isEditing:
 				if it, ok := r.list.SelectedItem().(resourceItem); ok {
 					method, path = r.strat.Update(it.id)
@@ -156,8 +179,8 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 				method, path = r.strat.Create()
 				r.selectID = ""
 			}
-			r.editor = nil
-			r.isEditing = false
+			r.saveInFlight = true
+			r.editor.SetError("saving...")
 			return r, api.DoRequest(r.c, r.tag("save"), method, path, m.Body)
 		}
 		return r, cmd
@@ -220,11 +243,23 @@ func (r Resource) Update(msg tea.Msg) (Resource, tea.Cmd) {
 				r.detail.SetContent([]byte("No detail available for the selected item."))
 			}
 			return r, nil
-		case r.tag("save"), r.tag("delete"):
+		case r.tag("save"):
+			r.editor = nil
+			r.pendingName = ""
+			r.isEditing = false
+			r.saveInFlight = false
+			r.status = "OK"
+			return r, r.fetchList()
+		case r.tag("delete"):
 			r.status = "OK"
 			return r, r.fetchList()
 		}
 	case api.ErrorMsg:
+		if m.Tag == r.tag("save") && r.editor != nil {
+			r.saveInFlight = false
+			r.editor.SetError(formatAPIError(m))
+			return r, nil
+		}
 		if m.Err != nil {
 			r.status = "network error: " + m.Err.Error()
 		} else {
@@ -310,4 +345,11 @@ func (r Resource) View() string {
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, r.list.View(), "  ", r.detail.View())
 	return body + "\n" + footer
+}
+
+func formatAPIError(m api.ErrorMsg) string {
+	if m.Err != nil {
+		return "network error: " + m.Err.Error()
+	}
+	return fmt.Sprintf("HTTP %d: %s", m.Status, string(m.Body))
 }

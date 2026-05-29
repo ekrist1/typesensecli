@@ -12,6 +12,12 @@ var Curation []byte
 //go:embed synonym.json
 var Synonym []byte
 
+//go:embed stopword.json
+var Stopword []byte
+
+//go:embed preset.json
+var Preset []byte
+
 //go:embed alias.json
 var Alias []byte
 
@@ -24,6 +30,8 @@ func All() map[string][]byte {
 		"nlmodel":      NLModel,
 		"curation":     Curation,
 		"synonym":      Synonym,
+		"stopword":     Stopword,
+		"preset":       Preset,
 		"alias":        Alias,
 		"conversation": Conversation,
 	}

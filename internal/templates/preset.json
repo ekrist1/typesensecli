@@ -1,0 +1,7 @@
+{
+  "value": {
+    "collection": "products",
+    "q": "*",
+    "sort_by": "popularity:desc"
+  }
+}

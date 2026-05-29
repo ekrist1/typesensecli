@@ -99,9 +99,11 @@ func (s Synonyms) Update(msg tea.Msg) (Synonyms, tea.Cmd) {
 	case api.ErrorMsg:
 		switch {
 		case m.Tag == s.inner.tag("save"):
-			s.pendingLink = nil
-			s.pendingName = ""
-			s.pendingCollections = nil
+			if s.inner.editor == nil {
+				s.pendingLink = nil
+				s.pendingName = ""
+				s.pendingCollections = nil
+			}
 		case s.isLinkGetTag(m.Tag):
 			return s.handleLinkError(m, "load collection")
 		case s.isLinkPatchTag(m.Tag):

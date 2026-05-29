@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"clisense/internal/client"
 	"clisense/internal/config"
+	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
 	"clisense/internal/tui/screens"
 )
@@ -24,6 +27,8 @@ type App struct {
 	nlModels      screens.Resource
 	curations     screens.Curations
 	synonyms      screens.Synonyms
+	stopwords     screens.Resource
+	presets       screens.Resource
 	conversations screens.Conversations
 	settings      screens.Settings
 
@@ -36,7 +41,7 @@ func NewApp(cfg config.Config, cfgPath string, inSetup bool) App {
 		cfgPath: cfgPath,
 		inSetup: inSetup,
 		setup:   screens.NewSetup(cfg),
-		tabs:    []string{"Collections", "Aliases", "NL Models", "Curations", "Synonyms", "Conversations", "Settings"},
+		tabs:    []string{"Collections", "Aliases", "NL Models", "Curations", "Synonyms", "Stopwords", "Presets", "Conversations", "Settings"},
 		width:   100,
 		height:  30,
 	}
@@ -53,9 +58,13 @@ func (a *App) buildTabs() {
 	a.nlModels = screens.NewNLModels(a.c, a.width, a.height-3)
 	a.curations = screens.NewCurations(a.c, a.width, a.height-3)
 	a.synonyms = screens.NewSynonyms(a.c, a.width, a.height-3)
+	a.stopwords = screens.NewStopwords(a.c, a.width, a.height-3)
+	a.presets = screens.NewPresets(a.c, a.width, a.height-3)
 	a.conversations = screens.NewConversations(a.c, a.width, a.height-3)
 	a.settings = screens.NewSettings(a.cfg)
 }
+
+func (a App) settingsTabIndex() int { return len(a.tabs) - 1 }
 
 func (a App) Init() tea.Cmd {
 	if a.inSetup {
@@ -78,8 +87,12 @@ func (a *App) activateTab(index int) tea.Cmd {
 	case 4:
 		return a.synonyms.Init()
 	case 5:
-		return a.conversations.Init()
+		return a.stopwords.Init()
 	case 6:
+		return a.presets.Init()
+	case 7:
+		return a.conversations.Init()
+	case 8:
 		return a.settings.Init()
 	default:
 		return nil
@@ -96,18 +109,38 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.nlModels.SetSize(a.width, a.height-3)
 			a.curations.SetSize(a.width, a.height-3)
 			a.synonyms.SetSize(a.width, a.height-3)
+			a.stopwords.SetSize(a.width, a.height-3)
+			a.presets.SetSize(a.width, a.height-3)
 			a.conversations.SetSize(a.width, a.height-3)
 		}
 		return a, nil
 	case screens.SetupDoneMsg:
+		wasSetup := a.inSetup
 		a.cfg = m.Cfg
 		if err := config.Save(a.cfgPath, a.cfg); err != nil {
+			if a.inSetup {
+				a.setup.SetError("save failed: " + err.Error())
+			} else {
+				a.settings.SetError("save failed: " + err.Error())
+			}
 			return a, nil
 		}
 		a.c = client.New(a.cfg.URL, a.cfg.APIKey)
 		a.inSetup = false
 		a.buildTabs()
-		return a, a.collections.Init()
+		if wasSetup {
+			a.active = 0
+			return a, a.collections.Init()
+		}
+		return a, a.activateTab(a.active)
+	case api.SuccessMsg:
+		if !a.inSetup {
+			return a, a.routeTaggedAPIMessage(m.Tag, msg)
+		}
+	case api.ErrorMsg:
+		if !a.inSetup {
+			return a, a.routeTaggedAPIMessage(m.Tag, msg)
+		}
 	case tea.KeyMsg:
 		if a.inSetup {
 			var cmd tea.Cmd
@@ -118,19 +151,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.String() == "ctrl+c" {
 			return a, tea.Quit
 		}
-		// Settings is a form so it's treated as modal (keeps "q" and digits
-		// typable into the URL/API key fields) — but then tab/shift+tab
-		// don't reach the global tab-cycle handler, leaving the user stuck.
-		// Let tab/shift+tab escape Settings specifically.
-		if a.active == 6 {
+		// Settings is a form, so keep Tab/digits/q available for the inputs.
+		// Esc returns to Collections.
+		if a.active == a.settingsTabIndex() {
 			switch m.String() {
-			case "tab":
-				return a, a.activateTab((a.active + 1) % len(a.tabs))
-			case "shift+tab":
-				return a, a.activateTab((a.active - 1 + len(a.tabs)) % len(a.tabs))
+			case "esc":
+				return a, a.activateTab(0)
 			}
 		}
-		// Other globals (q, 1-7, tab, shift+tab) only fire when the active
+		// Other globals (q, 1-9, tab, shift+tab) only fire when the active
 		// screen has no modal open — otherwise typing "q" in an input would
 		// quit the app and "tab" would switch tabs instead of cycling fields.
 		if !a.activeHasModal() {
@@ -151,6 +180,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, a.activateTab(5)
 			case "7":
 				return a, a.activateTab(6)
+			case "8":
+				return a, a.activateTab(7)
+			case "9":
+				return a, a.activateTab(8)
 			case "tab":
 				return a, a.activateTab((a.active + 1) % len(a.tabs))
 			case "shift+tab":
@@ -178,11 +211,47 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case 4:
 		a.synonyms, cmd = a.synonyms.Update(msg)
 	case 5:
-		a.conversations, cmd = a.conversations.Update(msg)
+		a.stopwords, cmd = a.stopwords.Update(msg)
 	case 6:
+		a.presets, cmd = a.presets.Update(msg)
+	case 7:
+		a.conversations, cmd = a.conversations.Update(msg)
+	case 8:
 		a.settings, cmd = a.settings.Update(msg)
 	}
 	return a, cmd
+}
+
+func (a *App) routeTaggedAPIMessage(tag string, msg tea.Msg) tea.Cmd {
+	var cmd tea.Cmd
+	switch {
+	case tag == "collections" || tag == "collection-delete" ||
+		strings.HasPrefix(tag, "collection-detail:") ||
+		strings.HasPrefix(tag, "collection:search:"):
+		a.collections, cmd = a.collections.Update(msg)
+	case strings.HasPrefix(tag, "Aliases:"):
+		a.aliases, cmd = a.aliases.Update(msg)
+	case strings.HasPrefix(tag, "NL Models:"):
+		a.nlModels, cmd = a.nlModels.Update(msg)
+	case strings.HasPrefix(tag, "Curations:"):
+		a.curations, cmd = a.curations.Update(msg)
+	case strings.HasPrefix(tag, "Synonyms:"):
+		a.synonyms, cmd = a.synonyms.Update(msg)
+	case strings.HasPrefix(tag, "Stopwords:"):
+		a.stopwords, cmd = a.stopwords.Update(msg)
+	case strings.HasPrefix(tag, "Presets:"):
+		a.presets, cmd = a.presets.Update(msg)
+	case strings.HasPrefix(tag, "Conversations:") || tag == "conversations:test":
+		a.conversations, cmd = a.conversations.Update(msg)
+	case strings.HasPrefix(tag, "docpicker:"):
+		switch a.active {
+		case 3:
+			a.curations, cmd = a.curations.Update(msg)
+		case 4:
+			a.synonyms, cmd = a.synonyms.Update(msg)
+		}
+	}
+	return cmd
 }
 
 // activeHasModal reports whether the currently-visible screen has a modal,
@@ -201,8 +270,12 @@ func (a App) activeHasModal() bool {
 	case 4:
 		return a.synonyms.HasModal()
 	case 5:
-		return a.conversations.HasModal()
+		return a.stopwords.HasModal()
 	case 6:
+		return a.presets.HasModal()
+	case 7:
+		return a.conversations.HasModal()
+	case 8:
 		// Settings is a form — always treat as modal.
 		return true
 	}
@@ -229,8 +302,12 @@ func (a App) View() string {
 	case 4:
 		body = a.synonyms.View()
 	case 5:
-		body = a.conversations.View()
+		body = a.stopwords.View()
 	case 6:
+		body = a.presets.View()
+	case 7:
+		body = a.conversations.View()
+	case 8:
 		body = a.settings.View()
 	}
 	return bar.View() + "\n\n" + body

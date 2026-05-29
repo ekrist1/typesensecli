@@ -14,10 +14,12 @@ func NewSettings(cur config.Config) Settings { return Settings{setup: NewSetup(c
 
 func (s Settings) Init() tea.Cmd { return s.setup.Init() }
 
+func (s *Settings) SetError(msg string) { s.setup.SetError(msg) }
+
 func (s Settings) Update(msg tea.Msg) (Settings, tea.Cmd) {
 	var cmd tea.Cmd
 	s.setup, cmd = s.setup.Update(msg)
 	return s, cmd
 }
 
-func (s Settings) View() string { return s.setup.View() }
+func (s Settings) View() string { return s.setup.View() + "\nEsc back to Collections" }

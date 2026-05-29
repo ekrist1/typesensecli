@@ -35,6 +35,8 @@ func NewSetup(initial config.Config) Setup {
 
 func (s Setup) Init() tea.Cmd { return textinput.Blink }
 
+func (s *Setup) SetError(msg string) { s.err = msg }
+
 func (s Setup) Update(msg tea.Msg) (Setup, tea.Cmd) {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		switch km.String() {

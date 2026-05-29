@@ -15,6 +15,7 @@ import (
 	"clisense/internal/client"
 	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
+	"clisense/internal/tui/theme"
 )
 
 const tagCollections = "collections"
@@ -67,6 +68,8 @@ type Collections struct {
 	height int
 	status string
 
+	listW, fieldsW, detailW, paneH int
+
 	focus             collectionFocus
 	loadedCollection  string
 	pendingCollection string
@@ -77,13 +80,14 @@ type Collections struct {
 
 func NewCollections(c *client.Client, w, h int) Collections {
 	listWidth, fieldsWidth, detailWidth, paneHeight := collectionPaneSizes(w, h)
-	l := list.New(nil, list.NewDefaultDelegate(), listWidth, paneHeight)
-	l.Title = "Collections *"
+	l := list.New(nil, list.NewDefaultDelegate(), max(1, listWidth-2), max(1, paneHeight-2))
+	l.Title = "Collections"
+	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
 
-	tbl := newCollectionFieldTable(fieldsWidth, paneHeight)
-	detail := components.NewJSONView(detailWidth, paneHeight)
+	tbl := newCollectionFieldTable(max(1, fieldsWidth-2), max(1, paneHeight-2))
+	detail := components.NewJSONView(max(1, detailWidth-2), max(1, paneHeight-2))
 	detail.SetContent([]byte("Select a collection to inspect its schema fields."))
 
 	s := Collections{
@@ -94,6 +98,7 @@ func NewCollections(c *client.Client, w, h int) Collections {
 		width:  w,
 		height: h,
 		focus:  focusCollectionList,
+		listW:  listWidth, fieldsW: fieldsWidth, detailW: detailWidth, paneH: paneHeight,
 	}
 	s.syncFocus()
 	return s
@@ -108,11 +113,12 @@ func (s Collections) HasModal() bool {
 func (s *Collections) SetSize(w, h int) {
 	s.width, s.height = w, h
 	listWidth, fieldsWidth, detailWidth, paneHeight := collectionPaneSizes(w, h)
-	s.list.SetSize(listWidth, paneHeight)
-	s.fields.SetColumns(collectionFieldColumns(fieldsWidth))
-	s.fields.SetWidth(fieldsWidth)
-	s.fields.SetHeight(paneHeight)
-	s.detail.SetSize(detailWidth, paneHeight)
+	s.listW, s.fieldsW, s.detailW, s.paneH = listWidth, fieldsWidth, detailWidth, paneHeight
+	s.list.SetSize(max(1, listWidth-2), max(1, paneHeight-2))
+	s.fields.SetColumns(collectionFieldColumns(max(1, fieldsWidth-2)))
+	s.fields.SetWidth(max(1, fieldsWidth-2))
+	s.fields.SetHeight(max(1, paneHeight-2))
+	s.detail.SetSize(max(1, detailWidth-2), max(1, paneHeight-2))
 	if s.search != nil {
 		s.search.SetSize(w, h)
 	}
@@ -379,17 +385,23 @@ func (s Collections) View() string {
 	if s.confirm != nil {
 		return s.confirm.View()
 	}
-	footer := "←/→ switch pane · / filter collections · Ctrl+B/Ctrl+F scroll config · r refresh · q quit"
-	if s.focus == focusFieldTable {
-		footer = "focus fields · " + footer
-	} else {
-		footer = "focus collections · " + footer
-	}
-	footer = "s search documents · d delete collection · " + footer
+	footer := theme.KeyHints(
+		[2]string{"s", "search"}, [2]string{"d", "delete"}, [2]string{"←/→", "switch pane"},
+		[2]string{"/", "filter"}, [2]string{"Ctrl+B/Ctrl+F", "scroll"}, [2]string{"r", "refresh"}, [2]string{"q", "quit"},
+	)
 	if s.status != "" {
-		footer = s.status + " · " + footer
+		footer = theme.Status(statusKind(s.status), s.status) + theme.StatusBar.Render(" · ") + footer
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, s.list.View(), "  ", s.fields.View(), "  ", s.detail.View())
+	listFocused := s.focus == focusCollectionList
+	fieldsFocused := s.focus == focusFieldTable
+	listPanel := theme.Panel{Title: "Collections", Width: s.listW, Height: s.paneH, Focused: listFocused}
+	fieldsPanel := theme.Panel{Title: "Schema", Width: s.fieldsW, Height: s.paneH, Focused: fieldsFocused}
+	detailPanel := theme.Panel{Title: "Field", Width: s.detailW, Height: s.paneH}
+	body := lipgloss.JoinHorizontal(lipgloss.Top,
+		listPanel.Render(s.list.View()), " ",
+		fieldsPanel.Render(s.fields.View()), " ",
+		detailPanel.Render(s.detail.View()),
+	)
 	return body + "\n" + footer
 }
 
@@ -516,12 +528,12 @@ func collectionFieldColumns(width int) []table.Column {
 
 func collectionFieldTableStyles(focused bool) table.Styles {
 	styles := table.DefaultStyles()
-	styles.Header = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
+	styles.Header = lipgloss.NewStyle().Bold(true).Foreground(theme.Accent)
 	styles.Cell = lipgloss.NewStyle()
 	if focused {
-		styles.Selected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
+		styles.Selected = lipgloss.NewStyle().Bold(true).Foreground(theme.Accent)
 	} else {
-		styles.Selected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("244"))
+		styles.Selected = lipgloss.NewStyle().Bold(true).Foreground(theme.Muted)
 	}
 	return styles
 }

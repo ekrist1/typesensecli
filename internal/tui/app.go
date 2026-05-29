@@ -319,7 +319,7 @@ func (a App) View() string {
 	if a.inSetup {
 		return a.setup.View()
 	}
-	bar := components.TabBar{Titles: a.tabs, Active: a.active}
+	bar := components.TabBar{Titles: a.tabs, Active: a.active, Width: a.width}
 	bar.Style.Active = TabActive
 	bar.Style.Inactive = TabInactive
 	body := ""

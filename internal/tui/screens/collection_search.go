@@ -50,7 +50,7 @@ func newCollectionSearchModal(c *client.Client, collection string, searchable []
 
 	queryBy := textinput.New()
 	queryBy.Placeholder = "fields to search (e.g. title,summary)"
-	queryBy.Width = max(20, leftWidth-4)
+	queryBy.Width = collectionSearchInputWidth(leftWidth)
 	queryBy.CharLimit = 0
 	if len(searchable) > 0 {
 		queryBy.SetValue(defaultCollectionSearchField(searchable))
@@ -60,7 +60,7 @@ func newCollectionSearchModal(c *client.Client, collection string, searchable []
 
 	queryText := textinput.New()
 	queryText.Placeholder = "search text"
-	queryText.Width = max(20, leftWidth-4)
+	queryText.Width = collectionSearchInputWidth(leftWidth)
 	queryText.CharLimit = 0
 
 	results := list.New(nil, list.NewDefaultDelegate(), max(1, leftWidth-2), max(1, resultsHeight-2))
@@ -91,8 +91,8 @@ func (m *collectionSearchModal) SetSize(w, h int) {
 	m.width, m.height = w, h
 	leftWidth, rightWidth, resultsHeight, detailHeight := collectionSearchSizes(w, h)
 	m.leftW, m.rightW, m.resultsH, m.detailH = leftWidth, rightWidth, resultsHeight, detailHeight
-	m.queryBy.Width = max(20, leftWidth-4)
-	m.queryText.Width = max(20, leftWidth-4)
+	m.queryBy.Width = collectionSearchInputWidth(leftWidth)
+	m.queryText.Width = collectionSearchInputWidth(leftWidth)
 	m.results.SetSize(max(1, leftWidth-2), max(1, resultsHeight-2))
 	m.detail.SetSize(max(1, rightWidth-2), max(1, detailHeight-2))
 }
@@ -221,8 +221,11 @@ func (m collectionSearchModal) View() string {
 	if len(m.searchable) == 0 {
 		queryHint += "none detected from schema; enter query_by manually"
 	} else {
-		queryHint += truncateCollectionSearchString(strings.Join(m.searchable, ", "), 100)
+		queryHint += strings.Join(m.searchable, ", ")
 	}
+	// Keep the hint within the left pane so it can't push the detail panel
+	// off-screen when joined horizontally.
+	queryHint = truncateCollectionSearchString(queryHint, max(10, m.leftW-1))
 
 	leftLines := []string{
 		header,
@@ -235,7 +238,9 @@ func (m collectionSearchModal) View() string {
 		theme.Panel{Title: "Results", Width: m.leftW, Height: m.resultsH, Focused: m.focus == 2}.Render(m.results.View()),
 	}
 
-	left := strings.Join(leftLines, "\n")
+	// Cap the left column to its pane width so no long line (header, hint, or
+	// an input) can shift the detail panel rightward past the terminal edge.
+	left := lipgloss.NewStyle().MaxWidth(m.leftW).Render(strings.Join(leftLines, "\n"))
 	detailPanel := theme.Panel{Title: "Document", Width: m.rightW, Height: m.detailH}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", detailPanel.Render(m.detail.View()))
 	footer := theme.KeyHints(
@@ -243,6 +248,13 @@ func (m collectionSearchModal) View() string {
 		[2]string{"Ctrl+B/Ctrl+F", "scroll"}, [2]string{"Esc", "close"},
 	)
 	return body + "\n" + footer
+}
+
+// collectionSearchInputWidth sizes the query text inputs so that the
+// "Search fields: " / "Search text:   " label (15 cols) plus the input's
+// "> " prompt (2 cols) plus the value stay within the left pane width.
+func collectionSearchInputWidth(leftWidth int) int {
+	return max(10, leftWidth-17)
 }
 
 func collectionSearchSizes(totalWidth, totalHeight int) (leftWidth, rightWidth, resultsHeight, detailHeight int) {

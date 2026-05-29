@@ -8,6 +8,7 @@ import (
 	"clisense/internal/client"
 	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
+	"clisense/internal/tui/theme"
 )
 
 // panel describes a read-only cluster endpoint shown in the left list.
@@ -45,8 +46,9 @@ type Cluster struct {
 	ops      []op
 	payloads map[string][]byte // tag -> last response body
 
-	status        string
-	width, height int
+	status                string
+	width, height         int
+	listW, detailW, paneH int
 }
 
 func NewCluster(c *client.Client, w, h int) Cluster {
@@ -68,13 +70,14 @@ func NewCluster(c *client.Client, w, h int) Cluster {
 	for _, p := range panels {
 		items = append(items, clusterPanelItem{title: p.title})
 	}
-	l := list.New(items, list.NewDefaultDelegate(), listWidth, paneHeight)
+	l := list.New(items, list.NewDefaultDelegate(), max(1, listWidth-2), max(1, paneHeight-2))
 	l.Title = "Cluster"
+	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
 	l.SetFilteringEnabled(false)
 
-	detail := components.NewJSONView(detailWidth, paneHeight)
+	detail := components.NewJSONView(max(1, detailWidth-2), max(1, paneHeight-2))
 	detail.SetContent([]byte("Press r to load cluster info."))
 
 	return Cluster{
@@ -85,14 +88,16 @@ func NewCluster(c *client.Client, w, h int) Cluster {
 		ops:      ops,
 		payloads: map[string][]byte{},
 		width:    w, height: h,
+		listW: listWidth, detailW: detailWidth, paneH: paneHeight,
 	}
 }
 
 func (s *Cluster) SetSize(w, h int) {
 	s.width, s.height = w, h
 	listWidth, detailWidth, paneHeight := splitPaneSizes(w, h)
-	s.list.SetSize(listWidth, paneHeight)
-	s.detail.SetSize(detailWidth, paneHeight)
+	s.listW, s.detailW, s.paneH = listWidth, detailWidth, paneHeight
+	s.list.SetSize(max(1, listWidth-2), max(1, paneHeight-2))
+	s.detail.SetSize(max(1, detailWidth-2), max(1, paneHeight-2))
 }
 
 func (s Cluster) HasModal() bool { return s.confirm != nil }
@@ -118,6 +123,13 @@ func (s Cluster) selectedPanelTag() string {
 		}
 	}
 	return ""
+}
+
+func (s Cluster) selectedPanelTitle() string {
+	if it, ok := s.list.SelectedItem().(clusterPanelItem); ok {
+		return it.title
+	}
+	return "Detail"
 }
 
 func (s *Cluster) showSelectedPayload() {
@@ -200,10 +212,15 @@ func (s Cluster) View() string {
 	if s.confirm != nil {
 		return s.confirm.View()
 	}
-	footer := "r refresh · S snapshot · C compact · V vote · X clear-cache · PgUp/PgDn scroll · q quit"
+	footer := theme.KeyHints(
+		[2]string{"r", "refresh"}, [2]string{"S", "snapshot"}, [2]string{"C", "compact"},
+		[2]string{"V", "vote"}, [2]string{"X", "clear-cache"}, [2]string{"PgUp/PgDn", "scroll"}, [2]string{"q", "quit"},
+	)
 	if s.status != "" {
-		footer = s.status + " · " + footer
+		footer = theme.Status(statusKind(s.status), s.status) + theme.StatusBar.Render(" · ") + footer
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, s.list.View(), "  ", s.detail.View())
+	listPanel := theme.Panel{Title: "Cluster", Width: s.listW, Height: s.paneH, Focused: true}
+	detailPanel := theme.Panel{Title: s.selectedPanelTitle(), Width: s.detailW, Height: s.paneH}
+	body := lipgloss.JoinHorizontal(lipgloss.Top, listPanel.Render(s.list.View()), " ", detailPanel.Render(s.detail.View()))
 	return body + "\n" + footer
 }

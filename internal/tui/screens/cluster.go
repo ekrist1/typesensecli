@@ -28,7 +28,7 @@ type op struct {
 type clusterPanelItem struct{ title string }
 
 func (i clusterPanelItem) Title() string       { return i.title }
-func (i clusterPanelItem) Description() string  { return "" }
+func (i clusterPanelItem) Description() string { return "" }
 func (i clusterPanelItem) FilterValue() string { return i.title }
 
 const snapshotPath = "/tmp/typesense-snapshot"

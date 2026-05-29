@@ -55,3 +55,24 @@ func TestAPIKeyEndpoints(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyticsEndpoints(t *testing.T) {
+	tests := []struct {
+		name  string
+		wantM string
+		wantP string
+		call  func() (string, string)
+	}{
+		{name: "list rules", wantM: "GET", wantP: "/analytics/rules", call: ListAnalyticsRules},
+		{name: "create rule", wantM: "POST", wantP: "/analytics/rules", call: UpsertAnalyticsRule},
+		{name: "delete rule", wantM: "DELETE", wantP: "/analytics/rules/top_queries", call: func() (string, string) { return DeleteAnalyticsRule("top_queries") }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotM, gotP := tt.call()
+			if gotM != tt.wantM || gotP != tt.wantP {
+				t.Fatalf("got %s %s, want %s %s", gotM, gotP, tt.wantM, tt.wantP)
+			}
+		})
+	}
+}

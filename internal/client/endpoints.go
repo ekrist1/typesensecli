@@ -83,6 +83,12 @@ func DeletePreset(name string) (string, string) {
 	return "DELETE", fmt.Sprintf("/presets/%s", name)
 }
 
+func ListAnalyticsRules() (string, string)  { return "GET", "/analytics/rules" }
+func UpsertAnalyticsRule() (string, string) { return "POST", "/analytics/rules" }
+func DeleteAnalyticsRule(name string) (string, string) {
+	return "DELETE", fmt.Sprintf("/analytics/rules/%s", name)
+}
+
 func ListKeys() (string, string)  { return "GET", "/keys" }
 func CreateKey() (string, string) { return "POST", "/keys" }
 func GetKey(id string) (string, string) {

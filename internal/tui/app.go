@@ -30,6 +30,7 @@ type App struct {
 	stopwords     screens.Resource
 	presets       screens.Resource
 	conversations screens.Conversations
+	keys          screens.Keys
 	settings      screens.Settings
 
 	tabs []string
@@ -41,7 +42,7 @@ func NewApp(cfg config.Config, cfgPath string, inSetup bool) App {
 		cfgPath: cfgPath,
 		inSetup: inSetup,
 		setup:   screens.NewSetup(cfg),
-		tabs:    []string{"Collections", "Aliases", "NL Models", "Curations", "Synonyms", "Stopwords", "Presets", "Conversations", "Settings"},
+		tabs:    []string{"Collections", "Aliases", "NL Models", "Curations", "Synonyms", "Stopwords", "Presets", "Conversations", "API Keys", "Settings"},
 		width:   100,
 		height:  30,
 	}
@@ -61,6 +62,7 @@ func (a *App) buildTabs() {
 	a.stopwords = screens.NewStopwords(a.c, a.width, a.height-3)
 	a.presets = screens.NewPresets(a.c, a.width, a.height-3)
 	a.conversations = screens.NewConversations(a.c, a.width, a.height-3)
+	a.keys = screens.NewKeys(a.c, a.width, a.height-3)
 	a.settings = screens.NewSettings(a.cfg)
 }
 
@@ -93,6 +95,8 @@ func (a *App) activateTab(index int) tea.Cmd {
 	case 7:
 		return a.conversations.Init()
 	case 8:
+		return a.keys.Init()
+	case 9:
 		return a.settings.Init()
 	default:
 		return nil
@@ -112,6 +116,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.stopwords.SetSize(a.width, a.height-3)
 			a.presets.SetSize(a.width, a.height-3)
 			a.conversations.SetSize(a.width, a.height-3)
+			a.keys.SetSize(a.width, a.height-3)
 		}
 		return a, nil
 	case screens.SetupDoneMsg:
@@ -217,6 +222,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case 7:
 		a.conversations, cmd = a.conversations.Update(msg)
 	case 8:
+		a.keys, cmd = a.keys.Update(msg)
+	case 9:
 		a.settings, cmd = a.settings.Update(msg)
 	}
 	return a, cmd
@@ -243,6 +250,8 @@ func (a *App) routeTaggedAPIMessage(tag string, msg tea.Msg) tea.Cmd {
 		a.presets, cmd = a.presets.Update(msg)
 	case strings.HasPrefix(tag, "Conversations:") || tag == "conversations:test":
 		a.conversations, cmd = a.conversations.Update(msg)
+	case strings.HasPrefix(tag, "API Keys:"):
+		a.keys, cmd = a.keys.Update(msg)
 	case strings.HasPrefix(tag, "docpicker:"):
 		switch a.active {
 		case 3:
@@ -276,6 +285,8 @@ func (a App) activeHasModal() bool {
 	case 7:
 		return a.conversations.HasModal()
 	case 8:
+		return a.keys.HasModal()
+	case 9:
 		// Settings is a form — always treat as modal.
 		return true
 	}
@@ -308,6 +319,8 @@ func (a App) View() string {
 	case 7:
 		body = a.conversations.View()
 	case 8:
+		body = a.keys.View()
+	case 9:
 		body = a.settings.View()
 	}
 	return bar.View() + "\n\n" + body

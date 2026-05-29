@@ -24,6 +24,9 @@ var Alias []byte
 //go:embed conversation.json
 var Conversation []byte
 
+//go:embed apikey.json
+var APIKey []byte
+
 // All returns every template keyed by a short identifier.
 func All() map[string][]byte {
 	return map[string][]byte{
@@ -34,5 +37,6 @@ func All() map[string][]byte {
 		"preset":       Preset,
 		"alias":        Alias,
 		"conversation": Conversation,
+		"apikey":       APIKey,
 	}
 }

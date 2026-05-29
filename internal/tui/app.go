@@ -10,6 +10,7 @@ import (
 	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
 	"clisense/internal/tui/screens"
+	"clisense/internal/tui/theme"
 )
 
 type App struct {
@@ -56,17 +57,17 @@ func NewApp(cfg config.Config, cfgPath string, inSetup bool) App {
 }
 
 func (a *App) buildTabs() {
-	a.collections = screens.NewCollections(a.c, a.width, a.height-3)
-	a.aliases = screens.NewAliases(a.c, a.width, a.height-3)
-	a.nlModels = screens.NewNLModels(a.c, a.width, a.height-3)
-	a.curations = screens.NewCurations(a.c, a.width, a.height-3)
-	a.synonyms = screens.NewSynonyms(a.c, a.width, a.height-3)
-	a.stopwords = screens.NewStopwords(a.c, a.width, a.height-3)
-	a.presets = screens.NewPresets(a.c, a.width, a.height-3)
-	a.conversations = screens.NewConversations(a.c, a.width, a.height-3)
-	a.keys = screens.NewKeys(a.c, a.width, a.height-3)
-	a.analytics = screens.NewAnalytics(a.c, a.width, a.height-3)
-	a.cluster = screens.NewCluster(a.c, a.width, a.height-3)
+	a.collections = screens.NewCollections(a.c, a.width, a.height-4)
+	a.aliases = screens.NewAliases(a.c, a.width, a.height-4)
+	a.nlModels = screens.NewNLModels(a.c, a.width, a.height-4)
+	a.curations = screens.NewCurations(a.c, a.width, a.height-4)
+	a.synonyms = screens.NewSynonyms(a.c, a.width, a.height-4)
+	a.stopwords = screens.NewStopwords(a.c, a.width, a.height-4)
+	a.presets = screens.NewPresets(a.c, a.width, a.height-4)
+	a.conversations = screens.NewConversations(a.c, a.width, a.height-4)
+	a.keys = screens.NewKeys(a.c, a.width, a.height-4)
+	a.analytics = screens.NewAnalytics(a.c, a.width, a.height-4)
+	a.cluster = screens.NewCluster(a.c, a.width, a.height-4)
 	a.settings = screens.NewSettings(a.cfg)
 }
 
@@ -116,17 +117,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width, a.height = m.Width, m.Height
 		if !a.inSetup {
-			a.collections.SetSize(a.width, a.height-3)
-			a.aliases.SetSize(a.width, a.height-3)
-			a.nlModels.SetSize(a.width, a.height-3)
-			a.curations.SetSize(a.width, a.height-3)
-			a.synonyms.SetSize(a.width, a.height-3)
-			a.stopwords.SetSize(a.width, a.height-3)
-			a.presets.SetSize(a.width, a.height-3)
-			a.conversations.SetSize(a.width, a.height-3)
-			a.keys.SetSize(a.width, a.height-3)
-			a.analytics.SetSize(a.width, a.height-3)
-			a.cluster.SetSize(a.width, a.height-3)
+			a.collections.SetSize(a.width, a.height-4)
+			a.aliases.SetSize(a.width, a.height-4)
+			a.nlModels.SetSize(a.width, a.height-4)
+			a.curations.SetSize(a.width, a.height-4)
+			a.synonyms.SetSize(a.width, a.height-4)
+			a.stopwords.SetSize(a.width, a.height-4)
+			a.presets.SetSize(a.width, a.height-4)
+			a.conversations.SetSize(a.width, a.height-4)
+			a.keys.SetSize(a.width, a.height-4)
+			a.analytics.SetSize(a.width, a.height-4)
+			a.cluster.SetSize(a.width, a.height-4)
 		}
 		return a, nil
 	case screens.SetupDoneMsg:
@@ -320,8 +321,9 @@ func (a App) View() string {
 		return a.setup.View()
 	}
 	bar := components.TabBar{Titles: a.tabs, Active: a.active, Width: a.width}
-	bar.Style.Active = TabActive
-	bar.Style.Inactive = TabInactive
+	bar.Style.Active = theme.TabActive
+	bar.Style.Inactive = theme.TabInactive
+	header := theme.HeaderTitle.Render("clisense") + theme.HeaderMeta.Render(" — "+a.cfg.URL)
 	body := ""
 	switch a.active {
 	case 0:
@@ -349,5 +351,5 @@ func (a App) View() string {
 	case 11:
 		body = a.settings.View()
 	}
-	return bar.View() + "\n\n" + body
+	return header + "\n" + bar.View() + "\n\n" + body
 }

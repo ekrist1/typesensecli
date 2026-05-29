@@ -1,5 +1,21 @@
 package screens
 
+import "strings"
+
+// statusKind classifies a free-text status string for theme.Status coloring.
+func statusKind(s string) string {
+	switch {
+	case s == "":
+		return ""
+	case strings.HasPrefix(s, "OK"):
+		return "ok"
+	case strings.Contains(strings.ToLower(s), "error") || strings.HasPrefix(s, "HTTP "):
+		return "err"
+	default:
+		return ""
+	}
+}
+
 const (
 	splitGap           = 2
 	minPaneWidth       = 24

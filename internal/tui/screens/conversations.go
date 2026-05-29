@@ -12,6 +12,7 @@ import (
 	"clisense/internal/templates"
 	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
+	"clisense/internal/tui/theme"
 )
 
 type Conversations struct {
@@ -157,13 +158,15 @@ func (s Conversations) Update(msg tea.Msg) (Conversations, tea.Cmd) {
 
 func (s Conversations) View() string {
 	if s.testQuery != nil {
-		v := "Test conversation model\n\n"
-		v += "Collection: " + s.testCollection.View() + "\n\n"
-		v += "Query:\n" + s.testQuery.View() + "\n\n"
+		v := theme.HeaderTitle.Render("Test conversation model") + "\n\n"
+		v += theme.HeaderMeta.Render("Collection: ") + s.testCollection.View() + "\n\n"
+		v += theme.HeaderMeta.Render("Query:") + "\n" + s.testQuery.View() + "\n\n"
 		if s.testResult != nil {
-			v += "Response:\n" + s.testResult.View() + "\n"
+			v += theme.HeaderMeta.Render("Response:") + "\n" + s.testResult.View() + "\n"
 		}
-		v += "\nCtrl+S send · Tab switch · Esc close"
+		v += "\n" + theme.KeyHints(
+			[2]string{"Ctrl+S", "send"}, [2]string{"Tab", "switch"}, [2]string{"Esc", "close"},
+		)
 		return v
 	}
 	return s.inner.View()

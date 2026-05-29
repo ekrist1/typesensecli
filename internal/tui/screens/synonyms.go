@@ -12,6 +12,7 @@ import (
 	"clisense/internal/templates"
 	"clisense/internal/tui/api"
 	"clisense/internal/tui/components"
+	"clisense/internal/tui/theme"
 )
 
 type synonymCreateMode int
@@ -58,6 +59,10 @@ func NewSynonyms(c *client.Client, w, h int) Synonyms {
 		CreateNamePrompt: true,
 		ExtractItems:     synonymsExtractItems,
 		ExtractDetail:    synonymsExtractDetail,
+		FooterHints: [][2]string{
+			{"/", "filter"}, {"n", "wizard new"}, {"N", "raw new"}, {"e", "wizard edit"},
+			{"E", "raw edit"}, {"d", "delete"}, {"PgUp/PgDn", "scroll"}, {"r", "refresh"}, {"q", "quit"},
+		},
 	}, w, h)
 	return Synonyms{inner: inner}
 }
@@ -145,30 +150,29 @@ func (s Synonyms) Update(msg tea.Msg) (Synonyms, tea.Cmd) {
 func (s Synonyms) View() string {
 	switch {
 	case s.namePrompt != nil:
-		body := "Synonym set name:\n\n" + s.namePrompt.View() + "\n\nEnter continue · Esc cancel"
+		title := "Synonym set name"
 		if s.createMode == synonymCreateRaw {
-			body = "Synonym set name (raw JSON):\n\n" + s.namePrompt.View() + "\n\nEnter continue · Esc cancel"
+			title = "Synonym set name (raw JSON)"
 		}
+		body := theme.PanelTitle.Render(title) + "\n\n" + s.namePrompt.View() + "\n\n" +
+			theme.KeyHints([2]string{"Enter", "continue"}, [2]string{"Esc", "cancel"})
 		if s.promptErr != "" {
-			body += "\n\n" + s.promptErr
+			body += "\n\n" + theme.StatusErr.Render(s.promptErr)
 		}
 		return body
 	case s.linkPrompt != nil:
-		body := "Collections to link this synonym set to:\n\n" + s.linkPrompt.View() +
-			"\n\nComma-separated names · Enter continue · Esc cancel"
+		body := theme.PanelTitle.Render("Collections to link this synonym set to") + "\n\n" +
+			s.linkPrompt.View() + "\n\n" +
+			theme.KeyHints([2]string{"Enter", "continue"}, [2]string{"Esc", "cancel"}) +
+			theme.StatusBar.Render("  (comma-separated names)")
 		if s.promptErr != "" {
-			body += "\n\n" + s.promptErr
+			body += "\n\n" + theme.StatusErr.Render(s.promptErr)
 		}
 		return body
 	case s.wizard != nil:
 		return s.wizard.View()
 	default:
-		view := s.inner.View()
-		return strings.Replace(view,
-			"/ filter · n new · e edit · d delete · PgUp/PgDn scroll JSON · r refresh · q quit",
-			"/ filter · n wizard new · N raw new · e wizard edit · E raw edit · d delete · PgUp/PgDn scroll JSON · r refresh · q quit",
-			1,
-		)
+		return s.inner.View()
 	}
 }
 

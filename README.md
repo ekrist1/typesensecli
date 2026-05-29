@@ -10,6 +10,7 @@ A fast, keyboard-driven terminal UI for administering a [Typesense](https://type
 
 ## Features
 
+- **Polished terminal UI** — an app header, a scrolling tab bar, and titled rounded-border panels with a focus-highlighted active pane, built on an adaptive (light/dark aware) lipgloss color theme.
 - **Tabbed admin console** — switch between resource types with number keys or `Tab`/`Shift+Tab`.
 - **Collections** — list, inspect, update (PATCH), delete, and run ad-hoc document searches.
 - **Aliases** — list, view, upsert, and delete collection aliases.

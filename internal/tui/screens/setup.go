@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"clisense/internal/config"
+	"clisense/internal/tui/theme"
 )
 
 type SetupDoneMsg struct {
@@ -69,12 +70,14 @@ func (s Setup) Update(msg tea.Msg) (Setup, tea.Cmd) {
 }
 
 func (s Setup) View() string {
-	v := "clisense — Typesense connection\n\n"
-	v += "URL:     " + s.url.View() + "\n"
-	v += "API key: " + s.apiKey.View() + "\n\n"
+	v := theme.HeaderTitle.Render("clisense") + theme.HeaderMeta.Render(" — Typesense connection") + "\n\n"
+	v += theme.HeaderMeta.Render("URL:     ") + s.url.View() + "\n"
+	v += theme.HeaderMeta.Render("API key: ") + s.apiKey.View() + "\n\n"
 	if s.err != "" {
-		v += s.err + "\n"
+		v += theme.StatusErr.Render(s.err) + "\n"
 	}
-	v += "Tab/↑↓ switch · Enter save · Ctrl+C quit"
+	v += theme.KeyHints(
+		[2]string{"Tab/↑↓", "switch"}, [2]string{"Enter", "save"}, [2]string{"Ctrl+C", "quit"},
+	)
 	return v
 }

@@ -33,3 +33,25 @@ func TestCollectionAndAliasEndpoints(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIKeyEndpoints(t *testing.T) {
+	tests := []struct {
+		name  string
+		wantM string
+		wantP string
+		call  func() (string, string)
+	}{
+		{name: "list keys", wantM: "GET", wantP: "/keys", call: ListKeys},
+		{name: "create key", wantM: "POST", wantP: "/keys", call: CreateKey},
+		{name: "get key", wantM: "GET", wantP: "/keys/7", call: func() (string, string) { return GetKey("7") }},
+		{name: "delete key", wantM: "DELETE", wantP: "/keys/7", call: func() (string, string) { return DeleteKey("7") }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotM, gotP := tt.call()
+			if gotM != tt.wantM || gotP != tt.wantP {
+				t.Fatalf("got %s %s, want %s %s", gotM, gotP, tt.wantM, tt.wantP)
+			}
+		})
+	}
+}

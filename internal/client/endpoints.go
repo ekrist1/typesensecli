@@ -83,6 +83,15 @@ func DeletePreset(name string) (string, string) {
 	return "DELETE", fmt.Sprintf("/presets/%s", name)
 }
 
+func ListKeys() (string, string)  { return "GET", "/keys" }
+func CreateKey() (string, string) { return "POST", "/keys" }
+func GetKey(id string) (string, string) {
+	return "GET", fmt.Sprintf("/keys/%s", id)
+}
+func DeleteKey(id string) (string, string) {
+	return "DELETE", fmt.Sprintf("/keys/%s", id)
+}
+
 func ListConversationModels() (string, string)  { return "GET", "/conversations/models" }
 func CreateConversationModel() (string, string) { return "POST", "/conversations/models" }
 func UpdateConversationModel(id string) (string, string) {

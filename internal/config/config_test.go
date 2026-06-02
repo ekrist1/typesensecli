@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -142,10 +143,22 @@ func TestLoadInvalidTabUnknown(t *testing.T) {
 	}
 	_, err := Load(path)
 	if !errors.Is(err, ErrInvalidTabs) {
-		t.Errorf("got %v, want ErrInvalidTabs", err)
+		t.Fatalf("got %v, want ErrInvalidTabs", err)
 	}
 	if errors.Is(err, ErrCorrupt) {
 		t.Errorf("ErrInvalidTabs should not wrap ErrCorrupt")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, `"nope"`) {
+		t.Errorf("error %q should name the offending id", msg)
+	}
+	if !strings.Contains(msg, "available values:") {
+		t.Errorf("error %q should list available values", msg)
+	}
+	for _, id := range DefaultTabOrder {
+		if !strings.Contains(msg, id) {
+			t.Errorf("error %q should mention %q", msg, id)
+		}
 	}
 }
 

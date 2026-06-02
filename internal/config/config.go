@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
@@ -126,10 +127,11 @@ func (c Config) validateTabs() error {
 	seen := map[string]struct{}{}
 	for _, id := range c.Tabs.Order {
 		if _, ok := validTabIDs[id]; !ok {
-			return fmt.Errorf("%w: unknown tab id %q", ErrInvalidTabs, id)
+			return fmt.Errorf("%w: unknown tab id %q in tabs.order; available values: %s",
+				ErrInvalidTabs, id, strings.Join(DefaultTabOrder, ", "))
 		}
 		if _, ok := seen[id]; ok {
-			return fmt.Errorf("%w: duplicate tab id %q", ErrInvalidTabs, id)
+			return fmt.Errorf("%w: duplicate tab id %q in tabs.order", ErrInvalidTabs, id)
 		}
 		seen[id] = struct{}{}
 	}

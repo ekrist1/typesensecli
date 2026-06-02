@@ -36,7 +36,8 @@ type App struct {
 	cluster       screens.Cluster
 	settings      screens.Settings
 
-	tabs []string
+	tabIDs []string
+	tabs   []string
 }
 
 func NewApp(cfg config.Config, cfgPath string, inSetup bool) App {
@@ -45,15 +46,50 @@ func NewApp(cfg config.Config, cfgPath string, inSetup bool) App {
 		cfgPath: cfgPath,
 		inSetup: inSetup,
 		setup:   screens.NewSetup(cfg),
-		tabs:    []string{"Collections", "Aliases", "NL Models", "Curations", "Synonyms", "Stopwords", "Presets", "Conversations", "API Keys", "Analytics", "Cluster", "Settings"},
 		width:   100,
 		height:  30,
 	}
+	a.configureTabs()
 	if !inSetup {
 		a.c = client.New(cfg.URL, cfg.APIKey)
 		a.buildTabs()
 	}
 	return a
+}
+
+var tabTitles = map[string]string{
+	"collections":   "Collections",
+	"aliases":       "Aliases",
+	"nl_models":     "NL Models",
+	"curations":     "Curations",
+	"synonyms":      "Synonyms",
+	"stopwords":     "Stopwords",
+	"presets":       "Presets",
+	"conversations": "Conversations",
+	"api_keys":      "API Keys",
+	"analytics":     "Analytics",
+	"cluster":       "Cluster",
+	"settings":      "Settings",
+}
+
+func (a *App) configureTabs() {
+	a.tabIDs = nil
+	a.tabs = nil
+	for _, id := range a.cfg.TabOrder() {
+		title, ok := tabTitles[id]
+		if !ok {
+			continue
+		}
+		a.tabIDs = append(a.tabIDs, id)
+		a.tabs = append(a.tabs, title)
+	}
+	if len(a.tabIDs) == 0 {
+		a.tabIDs = []string{"settings"}
+		a.tabs = []string{tabTitles["settings"]}
+	}
+	if a.active >= len(a.tabIDs) {
+		a.active = len(a.tabIDs) - 1
+	}
 }
 
 func (a *App) buildTabs() {
@@ -71,41 +107,58 @@ func (a *App) buildTabs() {
 	a.settings = screens.NewSettings(a.cfg)
 }
 
-func (a App) settingsTabIndex() int { return len(a.tabs) - 1 }
+func (a App) settingsTabIndex() int {
+	for i, id := range a.tabIDs {
+		if id == "settings" {
+			return i
+		}
+	}
+	return len(a.tabIDs) - 1
+}
+
+func (a App) activeTabID() string {
+	if a.active < 0 || a.active >= len(a.tabIDs) {
+		return ""
+	}
+	return a.tabIDs[a.active]
+}
 
 func (a App) Init() tea.Cmd {
 	if a.inSetup {
 		return a.setup.Init()
 	}
-	return a.collections.Init()
+	return a.activateTab(0)
 }
 
 func (a *App) activateTab(index int) tea.Cmd {
+	if index < 0 || index >= len(a.tabIDs) {
+		return nil
+	}
 	a.active = index
-	switch index {
-	case 0:
+	switch a.activeTabID() {
+	case "collections":
 		return a.collections.Init()
-	case 1:
+	case "aliases":
 		return a.aliases.Init()
-	case 2:
+	case "nl_models":
 		return a.nlModels.Init()
-	case 3:
+	case "curations":
 		return a.curations.Init()
-	case 4:
+	case "synonyms":
 		return a.synonyms.Init()
-	case 5:
+	case "stopwords":
 		return a.stopwords.Init()
-	case 6:
+	case "presets":
 		return a.presets.Init()
-	case 7:
+	case "conversations":
 		return a.conversations.Init()
-	case 8:
+	case "api_keys":
 		return a.keys.Init()
-	case 9:
+	case "analytics":
 		return a.analytics.Init()
-	case 10:
+	case "cluster":
 		return a.cluster.Init()
-	case 11:
+	case "settings":
 		return a.settings.Init()
 	default:
 		return nil
@@ -132,7 +185,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case screens.SetupDoneMsg:
 		wasSetup := a.inSetup
-		wasSettings := !a.inSetup && a.active == a.settingsTabIndex()
+		wasSettings := !a.inSetup && a.activeTabID() == "settings"
 		a.cfg = m.Cfg
 		if err := config.Save(a.cfgPath, a.cfg); err != nil {
 			if a.inSetup {
@@ -142,12 +195,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, nil
 		}
+		a.configureTabs()
 		a.c = client.New(a.cfg.URL, a.cfg.APIKey)
 		a.inSetup = false
 		a.buildTabs()
 		if wasSetup {
 			a.active = 0
-			return a, a.collections.Init()
+			return a, a.activateTab(0)
 		}
 		if wasSettings {
 			return a, a.activateTab(0)
@@ -173,7 +227,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Settings is a form, so keep Tab/digits/q available for the inputs.
 		// Esc returns to Collections.
-		if a.active == a.settingsTabIndex() {
+		if a.activeTabID() == "settings" {
 			switch m.String() {
 			case "esc":
 				return a, a.activateTab(0)
@@ -205,9 +259,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "9":
 				return a, a.activateTab(8)
 			case "tab":
-				return a, a.activateTab((a.active + 1) % len(a.tabs))
+				return a, a.activateTab((a.active + 1) % len(a.tabIDs))
 			case "shift+tab":
-				return a, a.activateTab((a.active - 1 + len(a.tabs)) % len(a.tabs))
+				return a, a.activateTab((a.active - 1 + len(a.tabIDs)) % len(a.tabIDs))
 			}
 		}
 	}
@@ -219,30 +273,30 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	switch a.active {
-	case 0:
+	switch a.activeTabID() {
+	case "collections":
 		a.collections, cmd = a.collections.Update(msg)
-	case 1:
+	case "aliases":
 		a.aliases, cmd = a.aliases.Update(msg)
-	case 2:
+	case "nl_models":
 		a.nlModels, cmd = a.nlModels.Update(msg)
-	case 3:
+	case "curations":
 		a.curations, cmd = a.curations.Update(msg)
-	case 4:
+	case "synonyms":
 		a.synonyms, cmd = a.synonyms.Update(msg)
-	case 5:
+	case "stopwords":
 		a.stopwords, cmd = a.stopwords.Update(msg)
-	case 6:
+	case "presets":
 		a.presets, cmd = a.presets.Update(msg)
-	case 7:
+	case "conversations":
 		a.conversations, cmd = a.conversations.Update(msg)
-	case 8:
+	case "api_keys":
 		a.keys, cmd = a.keys.Update(msg)
-	case 9:
+	case "analytics":
 		a.analytics, cmd = a.analytics.Update(msg)
-	case 10:
+	case "cluster":
 		a.cluster, cmd = a.cluster.Update(msg)
-	case 11:
+	case "settings":
 		a.settings, cmd = a.settings.Update(msg)
 	}
 	return a, cmd
@@ -276,10 +330,10 @@ func (a *App) routeTaggedAPIMessage(tag string, msg tea.Msg) tea.Cmd {
 	case strings.HasPrefix(tag, "Cluster:"):
 		a.cluster, cmd = a.cluster.Update(msg)
 	case strings.HasPrefix(tag, "docpicker:"):
-		switch a.active {
-		case 3:
+		switch a.activeTabID() {
+		case "curations":
 			a.curations, cmd = a.curations.Update(msg)
-		case 4:
+		case "synonyms":
 			a.synonyms, cmd = a.synonyms.Update(msg)
 		}
 	}
@@ -290,30 +344,30 @@ func (a *App) routeTaggedAPIMessage(tag string, msg tea.Msg) tea.Cmd {
 // wizard, or in-screen input that should receive keys like "q", "tab", or
 // digits before the global handlers consume them.
 func (a App) activeHasModal() bool {
-	switch a.active {
-	case 0:
+	switch a.activeTabID() {
+	case "collections":
 		return a.collections.HasModal()
-	case 1:
+	case "aliases":
 		return a.aliases.HasModal()
-	case 2:
+	case "nl_models":
 		return a.nlModels.HasModal()
-	case 3:
+	case "curations":
 		return a.curations.HasModal()
-	case 4:
+	case "synonyms":
 		return a.synonyms.HasModal()
-	case 5:
+	case "stopwords":
 		return a.stopwords.HasModal()
-	case 6:
+	case "presets":
 		return a.presets.HasModal()
-	case 7:
+	case "conversations":
 		return a.conversations.HasModal()
-	case 8:
+	case "api_keys":
 		return a.keys.HasModal()
-	case 9:
+	case "analytics":
 		return a.analytics.HasModal()
-	case 10:
+	case "cluster":
 		return a.cluster.HasModal()
-	case 11:
+	case "settings":
 		// Settings is a form — always treat as modal.
 		return true
 	}
@@ -329,30 +383,30 @@ func (a App) View() string {
 	bar.Style.Inactive = theme.TabInactive
 	header := theme.HeaderTitle.Render("clisense") + theme.HeaderMeta.Render(" — "+a.cfg.URL)
 	body := ""
-	switch a.active {
-	case 0:
+	switch a.activeTabID() {
+	case "collections":
 		body = a.collections.View()
-	case 1:
+	case "aliases":
 		body = a.aliases.View()
-	case 2:
+	case "nl_models":
 		body = a.nlModels.View()
-	case 3:
+	case "curations":
 		body = a.curations.View()
-	case 4:
+	case "synonyms":
 		body = a.synonyms.View()
-	case 5:
+	case "stopwords":
 		body = a.stopwords.View()
-	case 6:
+	case "presets":
 		body = a.presets.View()
-	case 7:
+	case "conversations":
 		body = a.conversations.View()
-	case 8:
+	case "api_keys":
 		body = a.keys.View()
-	case 9:
+	case "analytics":
 		body = a.analytics.View()
-	case 10:
+	case "cluster":
 		body = a.cluster.View()
-	case 11:
+	case "settings":
 		body = a.settings.View()
 	}
 	return header + "\n" + bar.View() + "\n\n" + body

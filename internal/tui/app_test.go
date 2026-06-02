@@ -11,6 +11,22 @@ import (
 	"clisense/internal/tui/screens"
 )
 
+func TestNewAppUsesConfiguredTabOrder(t *testing.T) {
+	cfg := config.Config{
+		URL:    "http://localhost:8108",
+		APIKey: "xyz",
+		Tabs:   config.TabsConfig{Order: []string{"analytics", "collections", "settings"}},
+	}
+	app := NewApp(cfg, "/tmp/config.toml", false)
+
+	want := []string{"analytics", "collections", "settings"}
+	for i, id := range want {
+		if app.tabIDs[i] != id {
+			t.Fatalf("tabIDs = %+v, want %+v", app.tabIDs, want)
+		}
+	}
+}
+
 func TestSettingsEnterSavesConfig(t *testing.T) {
 	cfg := config.Config{URL: "http://localhost:8108", APIKey: "xyz"}
 	path := filepath.Join(t.TempDir(), "config.yaml")

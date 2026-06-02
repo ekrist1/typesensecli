@@ -95,6 +95,55 @@ func TestSettingsCanSelectDefaultCluster(t *testing.T) {
 	}
 }
 
+func TestGlobalClusterPickerSwitchesCluster(t *testing.T) {
+	cfg := config.Config{
+		Global: config.GlobalConfig{DefaultCluster: "local"},
+		Clusters: map[string]config.ClusterConfig{
+			"local": {URL: "http://localhost:8108", APIKey: "local-key"},
+			"prod":  {URL: "https://typesense.example.com", APIKey: "prod-key"},
+		},
+		Tabs: config.TabsConfig{Order: []string{"collections", "settings"}},
+	}
+	path := filepath.Join(t.TempDir(), "config.toml")
+	app := NewApp(cfg, path, false)
+
+	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if cmd != nil {
+		cmd()
+	}
+	app = model.(App)
+	if !app.picking {
+		t.Fatal("global cluster picker did not open")
+	}
+	model, cmd = app.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if cmd != nil {
+		cmd()
+	}
+	app = model.(App)
+	model, cmd = app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		cmd()
+	}
+	app = model.(App)
+
+	if app.picking {
+		t.Fatal("global cluster picker stayed open after selection")
+	}
+	if app.cfg.ActiveClusterName() != "prod" {
+		t.Fatalf("active cluster = %q, want prod", app.cfg.ActiveClusterName())
+	}
+	if app.cfg.URL() != "https://typesense.example.com" || app.cfg.APIKey() != "prod-key" {
+		t.Fatalf("got url=%q apiKey=%q", app.cfg.URL(), app.cfg.APIKey())
+	}
+	saved, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load saved config: %v", err)
+	}
+	if saved.ActiveClusterName() != "prod" {
+		t.Fatalf("saved active cluster = %q, want prod", saved.ActiveClusterName())
+	}
+}
+
 func TestCtrlCQuitsInitialSetup(t *testing.T) {
 	app := NewApp(config.Config{}, "/tmp/config.yaml", true)
 

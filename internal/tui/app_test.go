@@ -41,3 +41,15 @@ func TestSettingsEnterSavesConfig(t *testing.T) {
 		t.Fatalf("active tab = %d, want 0", app.active)
 	}
 }
+
+func TestCtrlCQuitsInitialSetup(t *testing.T) {
+	app := NewApp(config.Config{}, "/tmp/config.yaml", true)
+
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("ctrl+c in setup returned no command")
+	}
+	if msg := cmd(); msg != tea.Quit() {
+		t.Fatalf("ctrl+c command returned %v, want tea.Quit", msg)
+	}
+}

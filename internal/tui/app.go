@@ -162,14 +162,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.routeTaggedAPIMessage(m.Tag, msg)
 		}
 	case tea.KeyMsg:
+		// Ctrl+C always quits, including the first-run setup form.
+		if m.String() == "ctrl+c" {
+			return a, tea.Quit
+		}
 		if a.inSetup {
 			var cmd tea.Cmd
 			a.setup, cmd = a.setup.Update(msg)
 			return a, cmd
-		}
-		// Ctrl+C always quits.
-		if m.String() == "ctrl+c" {
-			return a, tea.Quit
 		}
 		// Settings is a form, so keep Tab/digits/q available for the inputs.
 		// Esc returns to Collections.

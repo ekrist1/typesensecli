@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -378,7 +379,20 @@ func (a App) View() string {
 	if a.inSetup {
 		return a.setup.View()
 	}
-	bar := components.TabBar{Titles: a.tabs, Active: a.active, Width: a.width}
+	titles := make([]string, len(a.tabs))
+	for i, t := range a.tabs {
+		if i >= 9 {
+			titles[i] = t
+			continue
+		}
+		digit := strconv.Itoa(i + 1)
+		if i == a.active {
+			titles[i] = digit + " " + t
+		} else {
+			titles[i] = theme.TabNumber.Render(digit) + " " + t
+		}
+	}
+	bar := components.TabBar{Titles: titles, Active: a.active, Width: a.width}
 	bar.Style.Active = theme.TabActive
 	bar.Style.Inactive = theme.TabInactive
 	header := theme.HeaderTitle.Render("clisense") + theme.HeaderMeta.Render(" — "+a.cfg.URL)

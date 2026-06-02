@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -141,6 +142,31 @@ func TestGlobalClusterPickerSwitchesCluster(t *testing.T) {
 	}
 	if saved.ActiveClusterName() != "prod" {
 		t.Fatalf("saved active cluster = %q, want prod", saved.ActiveClusterName())
+	}
+}
+
+func TestGlobalClusterPickerOverlaysCurrentPage(t *testing.T) {
+	cfg := config.Config{
+		Global: config.GlobalConfig{DefaultCluster: "local"},
+		Clusters: map[string]config.ClusterConfig{
+			"local": {URL: "http://localhost:8108", APIKey: "local-key"},
+			"prod":  {URL: "https://typesense.example.com", APIKey: "prod-key"},
+		},
+		Tabs: config.TabsConfig{Order: []string{"collections", "settings"}},
+	}
+	app := NewApp(cfg, "/tmp/config.toml", false)
+	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if cmd != nil {
+		cmd()
+	}
+	app = model.(App)
+
+	view := app.View()
+	if !strings.Contains(view, "Clusters") {
+		t.Fatal("view does not contain cluster picker")
+	}
+	if !strings.Contains(view, "Collections") {
+		t.Fatal("view does not preserve underlying page content")
 	}
 }
 

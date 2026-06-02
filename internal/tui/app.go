@@ -389,7 +389,17 @@ func (a *App) moveClusterPick(delta int) {
 	a.pickIx = (a.pickIx + delta + len(names)) % len(names)
 }
 
-func (a App) clusterPickerView() string {
+func (a App) bodyWithClusterPicker(body string) string {
+	bodyH := max(1, a.height-4)
+	body = padBody(body, max(1, a.width), bodyH)
+	modal := a.clusterPickerModal()
+	modalLines, modalW := overlayLines(modal)
+	x := max(0, (a.width-modalW)/2)
+	y := max(0, (bodyH-len(modalLines))/2)
+	return placeOverlay(x, y, modal, body)
+}
+
+func (a App) clusterPickerModal() string {
 	names := a.cfg.ClusterNames()
 	var b strings.Builder
 	for i, name := range names {
@@ -406,7 +416,9 @@ func (a App) clusterPickerView() string {
 			b.WriteString("  current")
 		}
 	}
-	v := theme.Panel{Title: "Clusters", Width: 48, Height: len(names) + 2, Focused: true}.Render(b.String())
+	width := min(60, max(32, a.width-8))
+	height := min(max(3, len(names)+2), max(3, a.height-8))
+	v := theme.Panel{Title: "Clusters", Width: width, Height: height, Focused: true}.Render(b.String())
 	if a.pickErr != "" {
 		v += "\n\n" + theme.StatusErr.Render(a.pickErr)
 	}
@@ -414,6 +426,17 @@ func (a App) clusterPickerView() string {
 		[2]string{"↑↓", "choose"}, [2]string{"Enter", "switch"}, [2]string{"Esc", "cancel"}, [2]string{"Ctrl+C", "quit"},
 	)
 	return v
+}
+
+func padBody(body string, width, height int) string {
+	lines := strings.Split(body, "\n")
+	if len(lines) < height {
+		lines = append(lines, make([]string, height-len(lines))...)
+	}
+	for i := range lines {
+		lines[i] = padRight(lines[i], width)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (a *App) selectPickedCluster() tea.Cmd {
@@ -507,7 +530,7 @@ func (a App) View() string {
 		body = a.settings.View()
 	}
 	if a.picking {
-		body = a.clusterPickerView()
+		body = a.bodyWithClusterPicker(body)
 	}
 	return header + "\n" + bar.View() + "\n\n" + body
 }

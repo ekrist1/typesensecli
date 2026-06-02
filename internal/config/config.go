@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("config not found")
-	ErrCorrupt  = errors.New("config corrupt")
+	ErrNotFound    = errors.New("config not found")
+	ErrCorrupt     = errors.New("config corrupt")
+	ErrInvalidTabs = errors.New("invalid tabs config")
 )
 
 type Config struct {
@@ -88,7 +89,7 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("%w: %v", ErrCorrupt, err)
 	}
 	if err := c.validateTabs(); err != nil {
-		return Config{}, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		return Config{}, err
 	}
 	return c, nil
 }
@@ -112,17 +113,23 @@ func (c Config) TabOrder() []string {
 	if len(c.Tabs.Order) == 0 {
 		return append([]string(nil), DefaultTabOrder...)
 	}
-	return append([]string(nil), c.Tabs.Order...)
+	order := append([]string(nil), c.Tabs.Order...)
+	for _, id := range order {
+		if id == "settings" {
+			return order
+		}
+	}
+	return append(order, "settings")
 }
 
 func (c Config) validateTabs() error {
 	seen := map[string]struct{}{}
 	for _, id := range c.Tabs.Order {
 		if _, ok := validTabIDs[id]; !ok {
-			return fmt.Errorf("unknown tab id %q", id)
+			return fmt.Errorf("%w: unknown tab id %q", ErrInvalidTabs, id)
 		}
 		if _, ok := seen[id]; ok {
-			return fmt.Errorf("duplicate tab id %q", id)
+			return fmt.Errorf("%w: duplicate tab id %q", ErrInvalidTabs, id)
 		}
 		seen[id] = struct{}{}
 	}

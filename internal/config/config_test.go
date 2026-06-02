@@ -125,3 +125,37 @@ func TestTabOrderConfigured(t *testing.T) {
 		t.Errorf("TabOrder() = %v, want %v", got, want)
 	}
 }
+
+func TestTabOrderAppendsSettings(t *testing.T) {
+	cfg := Config{Tabs: TabsConfig{Order: []string{"analytics", "collections"}}}
+	got := cfg.TabOrder()
+	want := []string{"analytics", "collections", "settings"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TabOrder() = %v, want %v", got, want)
+	}
+}
+
+func TestLoadInvalidTabUnknown(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[tabs]\norder = [\"nope\"]\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(path)
+	if !errors.Is(err, ErrInvalidTabs) {
+		t.Errorf("got %v, want ErrInvalidTabs", err)
+	}
+	if errors.Is(err, ErrCorrupt) {
+		t.Errorf("ErrInvalidTabs should not wrap ErrCorrupt")
+	}
+}
+
+func TestLoadInvalidTabDuplicate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[tabs]\norder = [\"collections\", \"collections\"]\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(path)
+	if !errors.Is(err, ErrInvalidTabs) {
+		t.Errorf("got %v, want ErrInvalidTabs", err)
+	}
+}

@@ -55,6 +55,46 @@ func TestSettingsEnterSavesConfig(t *testing.T) {
 	}
 }
 
+func TestSettingsCanSelectDefaultCluster(t *testing.T) {
+	cfg := config.Config{
+		Global: config.GlobalConfig{DefaultCluster: "local"},
+		Clusters: map[string]config.ClusterConfig{
+			"local": {URL: "http://localhost:8108", APIKey: "local-key"},
+			"prod":  {URL: "https://typesense.example.com", APIKey: "prod-key"},
+		},
+		Tabs: config.TabsConfig{Order: []string{"collections", "settings"}},
+	}
+	path := filepath.Join(t.TempDir(), "config.toml")
+	app := NewApp(cfg, path, false)
+
+	app.activateTab(app.settingsTabIndex())
+	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if cmd != nil {
+		cmd()
+	}
+	app = model.(App)
+	model, cmd = app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter in settings returned no command")
+	}
+	msg := cmd()
+	if _, ok := msg.(screens.SetupDoneMsg); !ok {
+		t.Fatalf("Enter in settings returned %T, want SetupDoneMsg", msg)
+	}
+
+	model, cmd = model.Update(msg)
+	if cmd != nil {
+		cmd()
+	}
+	app = model.(App)
+	if app.cfg.ActiveClusterName() != "prod" {
+		t.Fatalf("active cluster = %q, want prod", app.cfg.ActiveClusterName())
+	}
+	if app.cfg.URL() != "https://typesense.example.com" || app.cfg.APIKey() != "prod-key" {
+		t.Fatalf("got url=%q apiKey=%q", app.cfg.URL(), app.cfg.APIKey())
+	}
+}
+
 func TestCtrlCQuitsInitialSetup(t *testing.T) {
 	app := NewApp(config.Config{}, "/tmp/config.yaml", true)
 

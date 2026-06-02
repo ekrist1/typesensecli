@@ -14,15 +14,18 @@ type SetupDoneMsg struct {
 }
 
 type Setup struct {
-	cfg     config.Config
-	cluster textinput.Model
-	url     textinput.Model
-	apiKey  textinput.Model
-	focus   int // 0 = cluster, 1 = url, 2 = apiKey
-	err     string
+	cfg       config.Config
+	cluster   textinput.Model
+	url       textinput.Model
+	apiKey    textinput.Model
+	focus     int // 0 = cluster, 1 = url, 2 = apiKey
+	err       string
+	clusters  []string
+	clusterIx int // len(clusters) means the "new cluster" slot
 }
 
 func NewSetup(initial config.Config) Setup {
+	names := initial.ClusterNames()
 	active := initial.ActiveClusterName()
 	if active == "" {
 		active = "default"
@@ -40,11 +43,19 @@ func NewSetup(initial config.Config) Setup {
 	key.SetValue(initial.APIKey())
 	key.EchoMode = textinput.EchoPassword
 
+	clusterIx := 0
+	for i, name := range names {
+		if name == active {
+			clusterIx = i
+			break
+		}
+	}
+
 	focus := 1
-	if len(initial.ClusterNames()) > 1 {
+	if len(names) > 1 {
 		focus = 0
 	}
-	s := Setup{cfg: initial, cluster: cluster, url: url, apiKey: key, focus: focus}
+	s := Setup{cfg: initial, cluster: cluster, url: url, apiKey: key, focus: focus, clusters: names, clusterIx: clusterIx}
 	s.focusInput()
 	return s
 }
@@ -64,6 +75,16 @@ func (s Setup) Update(msg tea.Msg) (Setup, tea.Cmd) {
 			s.focus = (s.focus + 2) % 3
 			s.focusInput()
 			return s, nil
+		case "left":
+			if s.focus == 0 && len(s.clusters) > 0 {
+				s.cycleCluster(-1)
+				return s, nil
+			}
+		case "right":
+			if s.focus == 0 && len(s.clusters) > 0 {
+				s.cycleCluster(1)
+				return s, nil
+			}
 		case "enter":
 			if s.cluster.Value() == "" || s.url.Value() == "" || s.apiKey.Value() == "" {
 				s.err = "cluster, URL, and API key are required"
@@ -100,16 +121,42 @@ func (s *Setup) focusInput() {
 	}
 }
 
+func (s *Setup) cycleCluster(delta int) {
+	total := len(s.clusters) + 1
+	s.clusterIx = (s.clusterIx + delta + total) % total
+	if s.clusterIx == len(s.clusters) {
+		s.cluster.Placeholder = "new cluster name"
+		s.cluster.SetValue("")
+		s.url.SetValue("")
+		s.apiKey.SetValue("")
+		return
+	}
+	s.cluster.Placeholder = "default"
+	name := s.clusters[s.clusterIx]
+	s.cluster.SetValue(name)
+	if cluster, ok := s.cfg.Clusters[name]; ok {
+		s.url.SetValue(cluster.URL)
+		s.apiKey.SetValue(cluster.APIKey)
+	}
+}
+
 func (s Setup) View() string {
 	v := theme.HeaderTitle.Render("clisense") + theme.HeaderMeta.Render(" — Typesense connection") + "\n\n"
-	v += theme.HeaderMeta.Render("Cluster: ") + s.cluster.View() + "\n"
+	clusterLine := s.cluster.View()
+	if s.clusterIx == len(s.clusters) && len(s.clusters) > 0 {
+		clusterLine += theme.HeaderMeta.Render("  + new")
+	}
+	v += theme.HeaderMeta.Render("Cluster: ") + clusterLine + "\n"
 	v += theme.HeaderMeta.Render("URL:     ") + s.url.View() + "\n"
 	v += theme.HeaderMeta.Render("API key: ") + s.apiKey.View() + "\n\n"
 	if s.err != "" {
 		v += theme.StatusErr.Render(s.err) + "\n"
 	}
-	v += theme.KeyHints(
-		[2]string{"Tab/↑↓", "field"}, [2]string{"Enter", "save"}, [2]string{"Ctrl+C", "quit"},
-	)
+	hints := [][2]string{{"Tab/↑↓", "field"}}
+	if len(s.clusters) > 0 {
+		hints = append(hints, [2]string{"←→", "cluster"})
+	}
+	hints = append(hints, [2]string{"Enter", "save"}, [2]string{"Ctrl+C", "quit"})
+	v += theme.KeyHints(hints...)
 	return v
 }

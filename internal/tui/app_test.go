@@ -12,11 +12,8 @@ import (
 )
 
 func TestNewAppUsesConfiguredTabOrder(t *testing.T) {
-	cfg := config.Config{
-		URL:    "http://localhost:8108",
-		APIKey: "xyz",
-		Tabs:   config.TabsConfig{Order: []string{"analytics", "collections", "settings"}},
-	}
+	cfg := config.WithConnection("http://localhost:8108", "xyz")
+	cfg.Tabs = config.TabsConfig{Order: []string{"analytics", "collections", "settings"}}
 	app := NewApp(cfg, "/tmp/config.toml", false)
 
 	want := []string{"analytics", "collections", "settings"}
@@ -28,8 +25,8 @@ func TestNewAppUsesConfiguredTabOrder(t *testing.T) {
 }
 
 func TestSettingsEnterSavesConfig(t *testing.T) {
-	cfg := config.Config{URL: "http://localhost:8108", APIKey: "xyz"}
-	path := filepath.Join(t.TempDir(), "config.yaml")
+	cfg := config.WithConnection("http://localhost:8108", "xyz")
+	path := filepath.Join(t.TempDir(), "config.toml")
 	app := NewApp(cfg, path, false)
 
 	app.activateTab(app.settingsTabIndex())

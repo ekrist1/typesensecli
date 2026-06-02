@@ -13,11 +13,8 @@ func TestRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
 
-	in := Config{
-		URL:    "http://localhost:8108",
-		APIKey: "xyz",
-		Tabs:   TabsConfig{Order: []string{"collections", "settings"}},
-	}
+	in := WithConnection("http://localhost:8108", "xyz")
+	in.Tabs = TabsConfig{Order: []string{"collections", "settings"}}
 	if err := Save(path, in); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -60,8 +57,11 @@ func TestLoadLegacyYAMLFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.URL != "http://localhost:8108" || cfg.APIKey != "xyz" {
-		t.Errorf("got %+v, want legacy YAML migrated", cfg)
+	if cfg.URL() != "http://localhost:8108" || cfg.APIKey() != "xyz" {
+		t.Errorf("got url=%q apiKey=%q, want legacy YAML migrated", cfg.URL(), cfg.APIKey())
+	}
+	if cfg.ActiveClusterName() != "default" {
+		t.Errorf("active cluster = %q, want %q", cfg.ActiveClusterName(), "default")
 	}
 }
 
@@ -78,7 +78,7 @@ func TestLoadCorrupt(t *testing.T) {
 
 func TestSavePermissions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
-	if err := Save(path, Config{URL: "u", APIKey: "k"}); err != nil {
+	if err := Save(path, WithConnection("u", "k")); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
@@ -97,9 +97,10 @@ func TestNeedsSetup(t *testing.T) {
 		want bool
 	}{
 		{"empty", Config{}, true},
-		{"url only", Config{URL: "http://localhost:8108"}, true},
-		{"api key only", Config{APIKey: "xyz"}, true},
-		{"both set", Config{URL: "http://localhost:8108", APIKey: "xyz"}, false},
+		{"url only", Config{Global: GlobalConfig{URL: "http://localhost:8108"}}, true},
+		{"api key only", Config{Global: GlobalConfig{APIKey: "xyz"}}, true},
+		{"flat both set", Config{Global: GlobalConfig{URL: "http://localhost:8108", APIKey: "xyz"}}, false},
+		{"cluster set", WithConnection("http://localhost:8108", "xyz"), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -107,6 +108,40 @@ func TestNeedsSetup(t *testing.T) {
 				t.Errorf("NeedsSetup() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMultipleClustersUseDefault(t *testing.T) {
+	cfg := Config{
+		Global: GlobalConfig{DefaultCluster: "prod"},
+		Clusters: map[string]ClusterConfig{
+			"local": {URL: "http://localhost:8108", APIKey: "local-key"},
+			"prod":  {URL: "https://typesense.example.com", APIKey: "prod-key"},
+		},
+	}
+	if cfg.ActiveClusterName() != "prod" {
+		t.Errorf("active cluster = %q, want prod", cfg.ActiveClusterName())
+	}
+	if cfg.URL() != "https://typesense.example.com" {
+		t.Errorf("URL() = %q, want prod url", cfg.URL())
+	}
+	if cfg.APIKey() != "prod-key" {
+		t.Errorf("APIKey() = %q, want prod key", cfg.APIKey())
+	}
+	if cfg.NeedsSetup() {
+		t.Errorf("NeedsSetup() = true, want false with valid default cluster")
+	}
+}
+
+func TestMissingDefaultClusterPromptsSetup(t *testing.T) {
+	cfg := Config{
+		Clusters: map[string]ClusterConfig{
+			"local": {URL: "http://localhost:8108", APIKey: "local-key"},
+			"prod":  {URL: "https://typesense.example.com", APIKey: "prod-key"},
+		},
+	}
+	if !cfg.NeedsSetup() {
+		t.Errorf("NeedsSetup() = false, want true when default_cluster is unset and there are multiple clusters")
 	}
 }
 

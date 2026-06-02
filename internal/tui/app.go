@@ -51,7 +51,7 @@ func NewApp(cfg config.Config, cfgPath string, inSetup bool) App {
 	}
 	a.configureTabs()
 	if !inSetup {
-		a.c = client.New(cfg.URL, cfg.APIKey)
+		a.c = client.New(cfg.URL(), cfg.APIKey())
 		a.buildTabs()
 	}
 	return a
@@ -196,7 +196,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.configureTabs()
-		a.c = client.New(a.cfg.URL, a.cfg.APIKey)
+		a.c = client.New(a.cfg.URL(), a.cfg.APIKey())
 		a.inSetup = false
 		a.buildTabs()
 		if wasSetup {
@@ -381,7 +381,7 @@ func (a App) View() string {
 	bar := components.TabBar{Titles: a.tabs, Active: a.active, Width: a.width}
 	bar.Style.Active = theme.TabActive
 	bar.Style.Inactive = theme.TabInactive
-	header := theme.HeaderTitle.Render("clisense") + theme.HeaderMeta.Render(" — "+a.cfg.URL)
+	header := theme.HeaderTitle.Render("clisense") + theme.HeaderMeta.Render(" — "+a.cfg.URL())
 	body := ""
 	switch a.activeTabID() {
 	case "collections":

@@ -83,17 +83,37 @@ On first run (or if no config is found) you'll be dropped into the **setup scree
 
 ## Configuration
 
-Configuration lives in a YAML file:
+Configuration lives in a TOML file:
 
-- `$XDG_CONFIG_HOME/clisense/config.yaml` if `XDG_CONFIG_HOME` is set, otherwise
-- `~/.config/clisense/config.yaml`
+- `$XDG_CONFIG_HOME/clisense/config.toml` if `XDG_CONFIG_HOME` is set, otherwise
+- `~/.config/clisense/config.toml`
 
 It is created automatically by the setup screen, but you can also write it by hand:
 
-```yaml
-url: http://localhost:8108
-api_key: your-admin-api-key
+```toml
+url = "http://localhost:8108"
+api_key = "your-admin-api-key"
+
+[tabs]
+order = [
+  "collections",
+  "aliases",
+  "nl_models",
+  "curations",
+  "synonyms",
+  "stopwords",
+  "presets",
+  "conversations",
+  "api_keys",
+  "analytics",
+  "cluster",
+  "settings",
+]
 ```
+
+The `tabs.order` list controls both which tabs are shown and where they appear. Remove a tab ID to hide it, or reorder the IDs to change the tab bar placement. Valid IDs are `collections`, `aliases`, `nl_models`, `curations`, `synonyms`, `stopwords`, `presets`, `conversations`, `api_keys`, `analytics`, `cluster`, and `settings`.
+
+A legacy `config.yaml` at the same path is still loaded if no `config.toml` is present.
 
 The file is written with `0600` permissions since it holds your API key.
 
@@ -103,7 +123,7 @@ The file is written with `0600` permissions since it holds your API key.
 .
 ├── main.go                  # entrypoint: load config, start the TUI
 ├── internal/
-│   ├── config/              # read/write the on-disk YAML config
+│   ├── config/              # read/write the on-disk TOML config
 │   ├── client/              # thin HTTP wrapper + Typesense endpoint helpers
 │   ├── templates/           # embedded JSON skeletons for the editor
 │   └── tui/

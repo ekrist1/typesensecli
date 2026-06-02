@@ -225,10 +225,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.picking {
 			switch m.String() {
-			case "up":
+			case "up", "k":
 				a.moveClusterPick(-1)
 				return a, nil
-			case "down":
+			case "down", "j":
 				a.moveClusterPick(1)
 				return a, nil
 			case "enter":
@@ -423,7 +423,7 @@ func (a App) clusterPickerModal() string {
 		v += "\n\n" + theme.StatusErr.Render(a.pickErr)
 	}
 	v += "\n\n" + theme.KeyHints(
-		[2]string{"↑↓", "choose"}, [2]string{"Enter", "switch"}, [2]string{"Esc", "cancel"}, [2]string{"Ctrl+C", "quit"},
+		[2]string{"↑↓/jk", "choose"}, [2]string{"Enter", "switch"}, [2]string{"Esc", "cancel"}, [2]string{"Ctrl+C", "quit"},
 	)
 	return v
 }

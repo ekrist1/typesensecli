@@ -56,3 +56,23 @@ func TestSavePermissions(t *testing.T) {
 		t.Errorf("got perm %o, want 0600", info.Mode().Perm())
 	}
 }
+
+func TestNeedsSetup(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  Config
+		want bool
+	}{
+		{"empty", Config{}, true},
+		{"url only", Config{URL: "http://localhost:8108"}, true},
+		{"api key only", Config{APIKey: "xyz"}, true},
+		{"both set", Config{URL: "http://localhost:8108", APIKey: "xyz"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cfg.NeedsSetup(); got != tt.want {
+				t.Errorf("NeedsSetup() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -132,6 +132,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case screens.SetupDoneMsg:
 		wasSetup := a.inSetup
+		wasSettings := !a.inSetup && a.active == a.settingsTabIndex()
 		a.cfg = m.Cfg
 		if err := config.Save(a.cfgPath, a.cfg); err != nil {
 			if a.inSetup {
@@ -147,6 +148,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if wasSetup {
 			a.active = 0
 			return a, a.collections.Init()
+		}
+		if wasSettings {
+			return a, a.activateTab(0)
 		}
 		return a, a.activateTab(a.active)
 	case api.SuccessMsg:

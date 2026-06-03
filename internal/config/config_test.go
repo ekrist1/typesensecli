@@ -197,6 +197,99 @@ func TestLoadInvalidTabUnknown(t *testing.T) {
 	}
 }
 
+func TestSaveSplitsAPIKeysIntoSecrets(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	in := WithConnection("http://localhost:8108", "secret-key")
+
+	if err := Save(path, in); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	main, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(main), "secret-key") {
+		t.Errorf("config.toml should not contain the API key:\n%s", main)
+	}
+
+	secrets, err := os.ReadFile(SecretsPath(path))
+	if err != nil {
+		t.Fatalf("secrets.toml was not written: %v", err)
+	}
+	if !strings.Contains(string(secrets), "secret-key") {
+		t.Errorf("secrets.toml does not contain the API key:\n%s", secrets)
+	}
+}
+
+func TestLoadMergesSecretsSidecar(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(`[global]
+default_cluster = "local"
+
+[clusters.local]
+url = "http://localhost:8108"
+`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(SecretsPath(path), []byte(`[clusters.local]
+api_key = "secret-key"
+`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.APIKey() != "secret-key" {
+		t.Errorf("APIKey() = %q, want secret-key", cfg.APIKey())
+	}
+	if cfg.URL() != "http://localhost:8108" {
+		t.Errorf("URL() = %q, want http://localhost:8108", cfg.URL())
+	}
+}
+
+func TestLoadMigratesInlineAPIKeysToSecrets(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	inline := []byte(`[global]
+default_cluster = "local"
+
+[clusters.local]
+url = "http://localhost:8108"
+api_key = "secret-key"
+`)
+	if err := os.WriteFile(path, inline, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.APIKey() != "secret-key" {
+		t.Errorf("APIKey() = %q, want secret-key (in-memory)", cfg.APIKey())
+	}
+
+	main, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(main), "secret-key") {
+		t.Errorf("config.toml still contains the inline key after migration:\n%s", main)
+	}
+	secrets, err := os.ReadFile(SecretsPath(path))
+	if err != nil {
+		t.Fatalf("secrets.toml was not created: %v", err)
+	}
+	if !strings.Contains(string(secrets), "secret-key") {
+		t.Errorf("secrets.toml does not contain the migrated key:\n%s", secrets)
+	}
+}
+
 func TestLoadInvalidTabDuplicate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(path, []byte("[tabs]\norder = [\"collections\", \"collections\"]\n"), 0600); err != nil {

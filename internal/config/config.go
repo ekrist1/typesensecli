@@ -33,7 +33,7 @@ type GlobalConfig struct {
 
 type ClusterConfig struct {
 	URL    string `toml:"url" yaml:"url"`
-	APIKey string `toml:"api_key" yaml:"api_key"`
+	APIKey string `toml:"api_key,omitempty" yaml:"api_key,omitempty"`
 }
 
 type TabsConfig struct {
@@ -82,6 +82,26 @@ func DefaultPath() (string, error) {
 	return filepath.Join(home, ".config", "clisense", "config.toml"), nil
 }
 
+// SecretsPath returns the sidecar `secrets.toml` path next to a config file.
+// When this file exists, Load merges its API keys into the loaded config and
+// Save splits API keys into it so the main `config.toml` can be committed.
+func SecretsPath(configPath string) string {
+	return filepath.Join(filepath.Dir(configPath), "secrets.toml")
+}
+
+type secretsFile struct {
+	Global   secretsGlobal             `toml:"global,omitempty"`
+	Clusters map[string]secretsCluster `toml:"clusters,omitempty"`
+}
+
+type secretsGlobal struct {
+	APIKey string `toml:"api_key,omitempty"`
+}
+
+type secretsCluster struct {
+	APIKey string `toml:"api_key"`
+}
+
 func Load(path string) (Config, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -106,6 +126,25 @@ func Load(path string) (Config, error) {
 		return Config{}, err
 	}
 	c.migrateLegacyConnection()
+	if filepath.Ext(path) != ".toml" {
+		return c, nil
+	}
+	secretsPath := SecretsPath(path)
+	secrets, secretsExists, err := loadSecrets(secretsPath)
+	if err != nil {
+		return Config{}, err
+	}
+	if secretsExists {
+		c.mergeSecrets(secrets)
+		return c, nil
+	}
+	// Migrate inline API keys into a sidecar secrets.toml so the main
+	// config can be committed to dotfiles.
+	if hasInlineSecrets(c) {
+		if err := Save(path, c); err != nil {
+			return Config{}, err
+		}
+	}
 	return c, nil
 }
 
@@ -113,11 +152,86 @@ func Save(path string, c Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	b, err := toml.Marshal(c)
+	public, secrets := splitSecrets(c)
+	if err := writeTOML(path, public); err != nil {
+		return err
+	}
+	return writeTOML(SecretsPath(path), secrets)
+}
+
+func writeTOML(path string, v any) error {
+	b, err := toml.Marshal(v)
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, b, 0600)
+}
+
+func loadSecrets(path string) (secretsFile, bool, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return secretsFile{}, false, nil
+		}
+		return secretsFile{}, false, err
+	}
+	var s secretsFile
+	if err := toml.Unmarshal(b, &s); err != nil {
+		return secretsFile{}, false, fmt.Errorf("%w: secrets: %v", ErrCorrupt, err)
+	}
+	return s, true, nil
+}
+
+func (c *Config) mergeSecrets(s secretsFile) {
+	if c.Clusters == nil && len(s.Clusters) > 0 {
+		c.Clusters = map[string]ClusterConfig{}
+	}
+	for name, secret := range s.Clusters {
+		if secret.APIKey == "" {
+			continue
+		}
+		cluster, ok := c.Clusters[name]
+		if !ok {
+			continue
+		}
+		cluster.APIKey = secret.APIKey
+		c.Clusters[name] = cluster
+	}
+	if c.Global.APIKey == "" && s.Global.APIKey != "" {
+		c.Global.APIKey = s.Global.APIKey
+	}
+}
+
+func hasInlineSecrets(c Config) bool {
+	if c.Global.APIKey != "" {
+		return true
+	}
+	for _, cluster := range c.Clusters {
+		if cluster.APIKey != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func splitSecrets(c Config) (Config, secretsFile) {
+	public := c
+	secrets := secretsFile{Clusters: map[string]secretsCluster{}}
+	if len(c.Clusters) > 0 {
+		publicClusters := make(map[string]ClusterConfig, len(c.Clusters))
+		for name, cluster := range c.Clusters {
+			if cluster.APIKey != "" {
+				secrets.Clusters[name] = secretsCluster{APIKey: cluster.APIKey}
+			}
+			publicClusters[name] = ClusterConfig{URL: cluster.URL}
+		}
+		public.Clusters = publicClusters
+	}
+	if public.Global.APIKey != "" {
+		secrets.Global.APIKey = public.Global.APIKey
+		public.Global.APIKey = ""
+	}
+	return public, secrets
 }
 
 func (c Config) URL() string {

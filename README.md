@@ -129,6 +129,21 @@ A legacy `config.yaml` at the same path is still loaded if no `config.toml` is p
 
 The file is written with `0600` permissions since it holds your API key.
 
+### Secrets
+
+API keys are kept in a sidecar `secrets.toml` next to `config.toml` so the main config can be committed to a dotfiles repo. Both files live in the same directory.
+
+```toml
+# secrets.toml — keep out of version control
+[clusters.local]
+api_key = "your-local-admin-api-key"
+
+[clusters.production]
+api_key = "your-production-admin-api-key"
+```
+
+The first time clisense loads a `config.toml` that still has inline `api_key` values, it migrates them into a freshly written `secrets.toml` and rewrites `config.toml` without the keys. Subsequent saves keep them split. Add `secrets.toml` to your `.gitignore` (or use `**/secrets.toml`) before committing.
+
 ## Project layout
 
 ```

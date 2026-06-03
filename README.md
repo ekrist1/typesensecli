@@ -77,7 +77,7 @@ On first run (or if no config is found) you'll be dropped into the **setup scree
 | `c` | Open the cluster picker (from any normal tab) |
 | `q` | Quit |
 | `Ctrl+C` | Quit (always) |
-| `Esc` | Leave Settings and return to Collections |
+| `Esc` | Leave Settings and return to Collections, or the first visible tab if Collections is hidden |
 | `Ctrl+F` | Open the document picker (in the curation wizard) |
 | `←` / `→` | In Settings, cycle through configured clusters (and the `+ new` slot) |
 
@@ -98,11 +98,9 @@ default_cluster = "local"
 
 [clusters.local]
 url = "http://localhost:8108"
-api_key = "your-local-admin-api-key"
 
 [clusters.production]
 url = "https://typesense.example.com"
-api_key = "your-production-admin-api-key"
 
 [tabs]
 order = [
@@ -125,9 +123,9 @@ order = [
 
 The `tabs.order` list controls both which tabs are shown and where they appear. Remove a tab ID to hide it, or reorder the IDs to change the tab bar placement. Valid IDs are `collections`, `aliases`, `nl_models`, `curations`, `synonyms`, `stopwords`, `presets`, `conversations`, `api_keys`, `analytics`, `cluster`, and `settings`.
 
-A legacy `config.yaml` at the same path is still loaded if no `config.toml` is present.
+A legacy `config.yaml` in the same directory is still loaded if no `config.toml` is present.
 
-The file is written with `0600` permissions since it holds your API key.
+`config.toml` and `secrets.toml` are written with `0600` permissions. `secrets.toml` is the sensitive file because it holds your API keys.
 
 ### Secrets
 

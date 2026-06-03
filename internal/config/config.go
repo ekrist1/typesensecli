@@ -153,10 +153,10 @@ func Save(path string, c Config) error {
 		return err
 	}
 	public, secrets := splitSecrets(c)
-	if err := writeTOML(path, public); err != nil {
+	if err := writeTOML(SecretsPath(path), secrets); err != nil {
 		return err
 	}
-	return writeTOML(SecretsPath(path), secrets)
+	return writeTOML(path, public)
 }
 
 func writeTOML(path string, v any) error {

@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"clisense/internal/tui/api"
+	"clisense/internal/tui/components"
 )
 
 func TestKeysExtractItemsWrappedAndNumericID(t *testing.T) {
@@ -34,6 +35,39 @@ func TestKeysCapturesGeneratedSecretOnCreate(t *testing.T) {
 	k, _ = k.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if k.generated != nil {
 		t.Fatal("generated-key modal still open after esc")
+	}
+}
+
+func TestKeysAppliesListRefreshWhileGeneratedSecretIsOpen(t *testing.T) {
+	k := NewKeys(nil, 80, 24)
+	ed := components.NewJSONEditor("New API Keys", []byte(`{"description":"x"}`), 80, 24)
+	k.inner.editor = &ed
+
+	k, cmd := k.Update(api.SuccessMsg{Tag: keysSaveTag, Status: 201, Body: []byte(`{"id":9,"value":"SECRETVALUE","description":"x"}`)})
+	if cmd == nil {
+		t.Fatal("expected refresh command after API key create")
+	}
+	if k.generated == nil {
+		t.Fatal("expected generated-key modal to be open after create")
+	}
+
+	k, cmd = k.Update(api.SuccessMsg{Tag: "API Keys:list", Status: 200, Body: []byte(`{"keys":[{"id":9,"description":"x","value_prefix":"abc"}]}`)})
+	if cmd != nil {
+		cmd()
+	}
+	items := k.inner.list.Items()
+	if len(items) != 1 {
+		t.Fatalf("items = %d, want 1", len(items))
+	}
+	item, ok := items[0].(resourceItem)
+	if !ok {
+		t.Fatalf("item type = %T, want resourceItem", items[0])
+	}
+	if item.id != "9" {
+		t.Fatalf("item id = %q, want 9", item.id)
+	}
+	if k.generated == nil {
+		t.Fatal("generated-key modal closed while applying list refresh")
 	}
 }
 

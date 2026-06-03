@@ -15,9 +15,12 @@ import (
 func TestNewAppUsesConfiguredTabOrder(t *testing.T) {
 	cfg := config.WithConnection("http://localhost:8108", "xyz")
 	cfg.Tabs = config.TabsConfig{Order: []string{"analytics", "collections", "settings"}}
-	app := NewApp(cfg, "/tmp/config.toml", false)
+	app := NewApp(cfg, filepath.Join(t.TempDir(), "config.toml"), false)
 
 	want := []string{"analytics", "collections", "settings"}
+	if len(app.tabIDs) != len(want) {
+		t.Fatalf("tabIDs = %+v, want %+v", app.tabIDs, want)
+	}
 	for i, id := range want {
 		if app.tabIDs[i] != id {
 			t.Fatalf("tabIDs = %+v, want %+v", app.tabIDs, want)
@@ -27,6 +30,7 @@ func TestNewAppUsesConfiguredTabOrder(t *testing.T) {
 
 func TestSettingsEnterSavesConfig(t *testing.T) {
 	cfg := config.WithConnection("http://localhost:8108", "xyz")
+	cfg.Tabs = config.TabsConfig{Order: []string{"analytics", "settings", "collections"}}
 	path := filepath.Join(t.TempDir(), "config.toml")
 	app := NewApp(cfg, path, false)
 
@@ -51,8 +55,24 @@ func TestSettingsEnterSavesConfig(t *testing.T) {
 	if app.inSetup {
 		t.Fatal("app remained in setup after saving settings")
 	}
-	if app.active != 0 {
-		t.Fatalf("active tab = %d, want 0", app.active)
+	if app.activeTabID() != "collections" {
+		t.Fatalf("active tab = %q, want collections", app.activeTabID())
+	}
+}
+
+func TestSettingsEscActivatesCollectionsByID(t *testing.T) {
+	cfg := config.WithConnection("http://localhost:8108", "xyz")
+	cfg.Tabs = config.TabsConfig{Order: []string{"analytics", "settings", "collections"}}
+	app := NewApp(cfg, filepath.Join(t.TempDir(), "config.toml"), false)
+
+	app.activateTab(app.settingsTabIndex())
+	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd != nil {
+		cmd()
+	}
+	app = model.(App)
+	if app.activeTabID() != "collections" {
+		t.Fatalf("active tab = %q, want collections", app.activeTabID())
 	}
 }
 
@@ -145,6 +165,45 @@ func TestGlobalClusterPickerSwitchesCluster(t *testing.T) {
 	}
 }
 
+func TestGlobalClusterPickerKeepsClusterOnSaveFailure(t *testing.T) {
+	cfg := config.Config{
+		Global: config.GlobalConfig{DefaultCluster: "local"},
+		Clusters: map[string]config.ClusterConfig{
+			"local": {URL: "http://localhost:8108", APIKey: "local-key"},
+			"prod":  {URL: "https://typesense.example.com", APIKey: "prod-key"},
+		},
+		Tabs: config.TabsConfig{Order: []string{"collections", "settings"}},
+	}
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, []byte("not a directory"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp(cfg, filepath.Join(blocker, "config.toml"), false)
+
+	if !app.openClusterPicker() {
+		t.Fatal("global cluster picker did not open")
+	}
+	app.moveClusterPick(1)
+	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		cmd()
+	}
+	app = model.(App)
+
+	if !app.picking {
+		t.Fatal("global cluster picker closed after failed save")
+	}
+	if app.pickErr == "" {
+		t.Fatal("save failure did not set picker error")
+	}
+	if app.cfg.ActiveClusterName() != "local" {
+		t.Fatalf("active cluster = %q, want local", app.cfg.ActiveClusterName())
+	}
+	if app.cfg.URL() != "http://localhost:8108" || app.cfg.APIKey() != "local-key" {
+		t.Fatalf("got url=%q apiKey=%q, want local cluster", app.cfg.URL(), app.cfg.APIKey())
+	}
+}
+
 func TestGlobalClusterPickerOverlaysCurrentPage(t *testing.T) {
 	cfg := config.Config{
 		Global: config.GlobalConfig{DefaultCluster: "local"},
@@ -154,7 +213,7 @@ func TestGlobalClusterPickerOverlaysCurrentPage(t *testing.T) {
 		},
 		Tabs: config.TabsConfig{Order: []string{"collections", "settings"}},
 	}
-	app := NewApp(cfg, "/tmp/config.toml", false)
+	app := NewApp(cfg, filepath.Join(t.TempDir(), "config.toml"), false)
 	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 	if cmd != nil {
 		cmd()
@@ -171,7 +230,7 @@ func TestGlobalClusterPickerOverlaysCurrentPage(t *testing.T) {
 }
 
 func TestCtrlCQuitsInitialSetup(t *testing.T) {
-	app := NewApp(config.Config{}, "/tmp/config.yaml", true)
+	app := NewApp(config.Config{}, filepath.Join(t.TempDir(), "config.toml"), true)
 
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	if cmd == nil {

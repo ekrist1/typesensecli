@@ -52,6 +52,16 @@ func (s Keys) HasModal() bool { return s.generated != nil || s.inner.HasModal() 
 func (s Keys) Update(msg tea.Msg) (Keys, tea.Cmd) {
 	// Generated-secret modal open — swallow keys until dismissed.
 	if s.generated != nil {
+		if _, ok := msg.(api.SuccessMsg); ok {
+			var cmd tea.Cmd
+			s.inner, cmd = s.inner.Update(msg)
+			return s, cmd
+		}
+		if _, ok := msg.(api.ErrorMsg); ok {
+			var cmd tea.Cmd
+			s.inner, cmd = s.inner.Update(msg)
+			return s, cmd
+		}
 		if km, ok := msg.(tea.KeyMsg); ok {
 			switch km.String() {
 			case "esc", "enter", "q":

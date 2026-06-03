@@ -223,6 +223,30 @@ func TestSaveSplitsAPIKeysIntoSecrets(t *testing.T) {
 	}
 }
 
+func TestSaveDoesNotRewriteConfigWhenSecretsWriteFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	original := []byte("keep = \"original\"\n")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(SecretsPath(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Save(path, WithConnection("http://localhost:8108", "new-secret"))
+	if err == nil {
+		t.Fatal("Save returned nil, want error")
+	}
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(got) != string(original) {
+		t.Fatalf("config.toml was rewritten after secrets failure:\n%s", got)
+	}
+}
+
 func TestLoadMergesSecretsSidecar(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")

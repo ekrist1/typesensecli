@@ -112,12 +112,19 @@ func (a *App) buildTabs() {
 }
 
 func (a App) settingsTabIndex() int {
-	for i, id := range a.tabIDs {
-		if id == "settings" {
-			return i
-		}
+	if index, ok := a.tabIndex("settings"); ok {
+		return index
 	}
 	return len(a.tabIDs) - 1
+}
+
+func (a App) tabIndex(id string) (int, bool) {
+	for i, tabID := range a.tabIDs {
+		if tabID == id {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 func (a App) activeTabID() string {
@@ -125,6 +132,21 @@ func (a App) activeTabID() string {
 		return ""
 	}
 	return a.tabIDs[a.active]
+}
+
+func (a *App) activateTabByID(id string) (tea.Cmd, bool) {
+	index, ok := a.tabIndex(id)
+	if !ok {
+		return nil, false
+	}
+	return a.activateTab(index), true
+}
+
+func (a *App) activateCollectionsOrFirstTab() tea.Cmd {
+	if cmd, ok := a.activateTabByID("collections"); ok {
+		return cmd
+	}
+	return a.activateTab(0)
 }
 
 func (a App) Init() tea.Cmd {
@@ -208,7 +230,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.activateTab(0)
 		}
 		if wasSettings {
-			return a, a.activateTab(0)
+			return a, a.activateCollectionsOrFirstTab()
 		}
 		return a, a.activateTab(a.active)
 	case api.SuccessMsg:
@@ -246,11 +268,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, cmd
 		}
 		// Settings is a form, so keep Tab/digits/q available for the inputs.
-		// Esc returns to Collections.
+		// Esc returns to Collections when it is visible.
 		if a.activeTabID() == "settings" {
 			switch m.String() {
 			case "esc":
-				return a, a.activateTab(0)
+				return a, a.activateCollectionsOrFirstTab()
 			}
 		}
 		// Other globals (q, 1-9, tab, shift+tab) only fire when the active
@@ -446,11 +468,13 @@ func (a *App) selectPickedCluster() tea.Cmd {
 		a.picking = false
 		return nil
 	}
-	a.cfg.Global.DefaultCluster = names[a.pickIx]
-	if err := config.Save(a.cfgPath, a.cfg); err != nil {
+	nextCfg := a.cfg
+	nextCfg.Global.DefaultCluster = names[a.pickIx]
+	if err := config.Save(a.cfgPath, nextCfg); err != nil {
 		a.pickErr = "save failed: " + err.Error()
 		return nil
 	}
+	a.cfg = nextCfg
 	a.picking = false
 	a.pickErr = ""
 	a.c = client.New(a.cfg.URL(), a.cfg.APIKey())
@@ -509,7 +533,7 @@ func (a App) View() string {
 		if i == a.active {
 			titles[i] = digit + " " + t
 		} else {
-			titles[i] = theme.TabNumber.Render(digit) + " " + t
+			titles[i] = digit + " " + t
 		}
 	}
 	bar := components.TabBar{Titles: titles, Active: a.active, Width: a.width}

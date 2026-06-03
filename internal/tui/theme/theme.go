@@ -21,6 +21,7 @@ var (
 	HeaderMeta  = lipgloss.NewStyle().Foreground(Muted)
 	TabActive   = lipgloss.NewStyle().Bold(true).Foreground(Accent).Padding(0, 1)
 	TabInactive = lipgloss.NewStyle().Foreground(Muted).Padding(0, 1)
+	TabNumber   = lipgloss.NewStyle().Foreground(Subtle)
 	PanelTitle  = lipgloss.NewStyle().Bold(true).Foreground(Accent)
 	StatusBar   = lipgloss.NewStyle().Foreground(Muted)
 	StatusOK    = lipgloss.NewStyle().Foreground(Success)

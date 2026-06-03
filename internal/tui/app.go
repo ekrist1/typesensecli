@@ -23,6 +23,9 @@ type App struct {
 	active  int
 	width   int
 	height  int
+	picking bool
+	pickIx  int
+	pickErr string
 
 	collections   screens.Collections
 	aliases       screens.Resource
@@ -52,7 +55,7 @@ func NewApp(cfg config.Config, cfgPath string, inSetup bool) App {
 	}
 	a.configureTabs()
 	if !inSetup {
-		a.c = client.New(cfg.URL, cfg.APIKey)
+		a.c = client.New(cfg.URL(), cfg.APIKey())
 		a.buildTabs()
 	}
 	return a
@@ -197,7 +200,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.configureTabs()
-		a.c = client.New(a.cfg.URL, a.cfg.APIKey)
+		a.c = client.New(a.cfg.URL(), a.cfg.APIKey())
 		a.inSetup = false
 		a.buildTabs()
 		if wasSetup {
@@ -221,6 +224,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.String() == "ctrl+c" {
 			return a, tea.Quit
 		}
+		if a.picking {
+			switch m.String() {
+			case "up", "k":
+				a.moveClusterPick(-1)
+				return a, nil
+			case "down", "j":
+				a.moveClusterPick(1)
+				return a, nil
+			case "enter":
+				return a, a.selectPickedCluster()
+			case "esc":
+				a.picking = false
+				return a, nil
+			}
+			return a, nil
+		}
 		if a.inSetup {
 			var cmd tea.Cmd
 			a.setup, cmd = a.setup.Update(msg)
@@ -241,6 +260,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch m.String() {
 			case "q":
 				return a, tea.Quit
+			case "c":
+				if a.openClusterPicker() {
+					return a, nil
+				}
 			case "1":
 				return a, a.activateTab(0)
 			case "2":
@@ -341,10 +364,107 @@ func (a *App) routeTaggedAPIMessage(tag string, msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+func (a *App) openClusterPicker() bool {
+	names := a.cfg.ClusterNames()
+	if len(names) == 0 {
+		return false
+	}
+	a.pickIx = 0
+	active := a.cfg.ActiveClusterName()
+	for i, name := range names {
+		if name == active {
+			a.pickIx = i
+			break
+		}
+	}
+	a.pickErr = ""
+	a.picking = true
+	return true
+}
+
+func (a *App) moveClusterPick(delta int) {
+	names := a.cfg.ClusterNames()
+	if len(names) == 0 {
+		return
+	}
+	a.pickIx = (a.pickIx + delta + len(names)) % len(names)
+}
+
+func (a App) bodyWithClusterPicker(body string) string {
+	bodyH := max(1, a.height-4)
+	body = padBody(body, max(1, a.width), bodyH)
+	modal := a.clusterPickerModal()
+	modalLines, modalW := overlayLines(modal)
+	x := max(0, (a.width-modalW)/2)
+	y := max(0, (bodyH-len(modalLines))/2)
+	return placeOverlay(x, y, modal, body)
+}
+
+func (a App) clusterPickerModal() string {
+	names := a.cfg.ClusterNames()
+	var b strings.Builder
+	for i, name := range names {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		prefix := "  "
+		if i == a.pickIx {
+			prefix = "> "
+		}
+		b.WriteString(prefix)
+		b.WriteString(name)
+		if name == a.cfg.ActiveClusterName() {
+			b.WriteString("  current")
+		}
+	}
+	width := min(60, max(32, a.width-8))
+	height := min(max(3, len(names)+2), max(3, a.height-8))
+	v := theme.Panel{Title: "Clusters", Width: width, Height: height, Focused: true}.Render(b.String())
+	if a.pickErr != "" {
+		v += "\n\n" + theme.StatusErr.Render(a.pickErr)
+	}
+	v += "\n\n" + theme.KeyHints(
+		[2]string{"↑↓/jk", "choose"}, [2]string{"Enter", "switch"}, [2]string{"Esc", "cancel"}, [2]string{"Ctrl+C", "quit"},
+	)
+	return v
+}
+
+func padBody(body string, width, height int) string {
+	lines := strings.Split(body, "\n")
+	if len(lines) < height {
+		lines = append(lines, make([]string, height-len(lines))...)
+	}
+	for i := range lines {
+		lines[i] = padRight(lines[i], width)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (a *App) selectPickedCluster() tea.Cmd {
+	names := a.cfg.ClusterNames()
+	if len(names) == 0 || a.pickIx < 0 || a.pickIx >= len(names) {
+		a.picking = false
+		return nil
+	}
+	a.cfg.Global.DefaultCluster = names[a.pickIx]
+	if err := config.Save(a.cfgPath, a.cfg); err != nil {
+		a.pickErr = "save failed: " + err.Error()
+		return nil
+	}
+	a.picking = false
+	a.pickErr = ""
+	a.c = client.New(a.cfg.URL(), a.cfg.APIKey())
+	a.buildTabs()
+	return a.activateTab(a.active)
+}
+
 // activeHasModal reports whether the currently-visible screen has a modal,
 // wizard, or in-screen input that should receive keys like "q", "tab", or
 // digits before the global handlers consume them.
 func (a App) activeHasModal() bool {
+	if a.picking {
+		return true
+	}
 	switch a.activeTabID() {
 	case "collections":
 		return a.collections.HasModal()
@@ -395,7 +515,7 @@ func (a App) View() string {
 	bar := components.TabBar{Titles: titles, Active: a.active, Width: a.width}
 	bar.Style.Active = theme.TabActive
 	bar.Style.Inactive = theme.TabInactive
-	header := theme.HeaderTitle.Render("clisense") + theme.HeaderMeta.Render(" — "+a.cfg.URL)
+	header := theme.HeaderTitle.Render("clisense") + theme.HeaderMeta.Render(" — "+a.cfg.URL())
 	body := ""
 	switch a.activeTabID() {
 	case "collections":
@@ -422,6 +542,9 @@ func (a App) View() string {
 		body = a.cluster.View()
 	case "settings":
 		body = a.settings.View()
+	}
+	if a.picking {
+		body = a.bodyWithClusterPicker(body)
 	}
 	return header + "\n" + bar.View() + "\n\n" + body
 }

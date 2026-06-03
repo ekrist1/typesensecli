@@ -74,10 +74,12 @@ On first run (or if no config is found) you'll be dropped into the **setup scree
 | --- | --- |
 | `1`–`9` | Jump directly to one of the first nine tabs |
 | `Tab` / `Shift+Tab` | Cycle to the next / previous tab (use this to reach tabs beyond the ninth) |
+| `c` | Open the cluster picker (from any normal tab) |
 | `q` | Quit |
 | `Ctrl+C` | Quit (always) |
 | `Esc` | Leave Settings and return to Collections |
 | `Ctrl+F` | Open the document picker (in the curation wizard) |
+| `←` / `→` | In Settings, cycle through configured clusters (and the `+ new` slot) |
 
 > When a modal, wizard, or text input is open, `q`, the number keys, and `Tab` are passed through to the input instead of triggering global navigation.
 
@@ -91,8 +93,16 @@ Configuration lives in a TOML file:
 It is created automatically by the setup screen, but you can also write it by hand:
 
 ```toml
+[global]
+default_cluster = "local"
+
+[clusters.local]
 url = "http://localhost:8108"
-api_key = "your-admin-api-key"
+api_key = "your-local-admin-api-key"
+
+[clusters.production]
+url = "https://typesense.example.com"
+api_key = "your-production-admin-api-key"
 
 [tabs]
 order = [
@@ -110,6 +120,8 @@ order = [
   "settings",
 ]
 ```
+
+`global.default_cluster` selects the cluster used on launch. Press `c` from any normal tab to open the cluster picker, choose with `↑` / `↓` or `j` / `k`, then press `Enter` to switch and save it as the default. In Settings, cycle through configured clusters (and a trailing `+ new` slot) with `←` / `→` while focused on the Cluster field.
 
 The `tabs.order` list controls both which tabs are shown and where they appear. Remove a tab ID to hide it, or reorder the IDs to change the tab bar placement. Valid IDs are `collections`, `aliases`, `nl_models`, `curations`, `synonyms`, `stopwords`, `presets`, `conversations`, `api_keys`, `analytics`, `cluster`, and `settings`.
 

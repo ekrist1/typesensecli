@@ -132,6 +132,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case screens.SetupDoneMsg:
 		wasSetup := a.inSetup
+		wasSettings := !a.inSetup && a.active == a.settingsTabIndex()
 		a.cfg = m.Cfg
 		if err := config.Save(a.cfgPath, a.cfg); err != nil {
 			if a.inSetup {
@@ -148,6 +149,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.active = 0
 			return a, a.collections.Init()
 		}
+		if wasSettings {
+			return a, a.activateTab(0)
+		}
 		return a, a.activateTab(a.active)
 	case api.SuccessMsg:
 		if !a.inSetup {
@@ -158,14 +162,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.routeTaggedAPIMessage(m.Tag, msg)
 		}
 	case tea.KeyMsg:
+		// Ctrl+C always quits, including the first-run setup form.
+		if m.String() == "ctrl+c" {
+			return a, tea.Quit
+		}
 		if a.inSetup {
 			var cmd tea.Cmd
 			a.setup, cmd = a.setup.Update(msg)
 			return a, cmd
-		}
-		// Ctrl+C always quits.
-		if m.String() == "ctrl+c" {
-			return a, tea.Quit
 		}
 		// Settings is a form, so keep Tab/digits/q available for the inputs.
 		// Esc returns to Collections.

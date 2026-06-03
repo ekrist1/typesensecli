@@ -22,7 +22,7 @@ func main() {
 	inSetup := false
 	switch {
 	case err == nil:
-		// ok
+		inSetup = cfg.NeedsSetup()
 	case errors.Is(err, config.ErrNotFound), errors.Is(err, config.ErrCorrupt):
 		inSetup = true
 	default:

@@ -57,3 +57,7 @@ func Save(path string, c Config) error {
 	}
 	return os.WriteFile(path, b, 0600)
 }
+
+func (c Config) NeedsSetup() bool {
+	return c.URL == "" || c.APIKey == ""
+}
